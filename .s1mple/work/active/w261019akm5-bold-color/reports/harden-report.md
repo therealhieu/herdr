@@ -63,11 +63,11 @@ The test passes `&mut bold_color` to `reload_local_client_config` but its config
 
 Workflow mode only. The implementer fills this section; the sections above stay unchanged.
 
-- **Status:** `Pending`
+- **Status:** `Resolved`
 
 | Finding | Change | Verification | Commit | Result |
 |---|---|---|---|---|
-| `HRD-1` | `Pending` | `Pending` | `Pending` | `Pending` |
+| `HRD-1` | `src/client/tests/mod.rs:reload_local_client_config_refreshes_local_client_presentation_state` — config adds `bold_color = "#f8dea6"`; asserts `bold_color == Some(BoldColorConfig::Rgb(248, 222, 166))` | `cargo nextest run reload_local_client_config_refreshes` → 1 passed; with `*bold_color = loaded.config.ui.bold_color;` temporarily removed from `src/client/config_reload.rs` → failed (`left: None`, `right: Some(Rgb(248, 222, 166))`); source restored | `c320048d` | `Fixed` |
 
-- **Final checks:** `Pending`
-- **Remaining issues:** `Pending`
+- **Final checks:** `just lint` → `Passed` (exit 0); `just test` → `Passed` (exit 0; nextest 3917 passed / 14 skipped; Python and Bun suites 0 failures)
+- **Remaining issues:** None
