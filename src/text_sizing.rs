@@ -10,8 +10,6 @@
 
 pub(crate) mod cell;
 pub(crate) mod inject;
-// Wired into client and server frame output in the next change.
-#[allow(dead_code)]
 pub(crate) mod present;
 pub(crate) mod text;
 pub(crate) mod tracker;
@@ -66,8 +64,6 @@ pub(crate) fn set_host_supported(supported: bool) {
 }
 
 /// Returns whether this client's host terminal can draw sized text.
-// Read by client presentation; unused until then.
-#[allow(dead_code)]
 pub(crate) fn host_supported() -> bool {
     HOST_SUPPORTED.load(Ordering::Relaxed)
 }

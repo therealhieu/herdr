@@ -493,6 +493,7 @@ async fn run_client_loop(
         deferred_local_activation: None,
         draw_host_cursor,
         bold_color: config.bold_color,
+        text_sizing: Default::default(),
         detached_process_children: Vec::new(),
         shell: config.shell_config.map(shell::ClientShellState::new),
     };

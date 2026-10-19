@@ -113,7 +113,7 @@ impl ClientRenderState {
         }
     }
 
-    pub(crate) fn prepare_frame(&mut self, frame: FrameData) -> Option<PreparedRender> {
+    pub(crate) fn prepare_frame(&mut self, mut frame: FrameData) -> Option<PreparedRender> {
         match self {
             Self::Semantic { .. } => None,
             Self::TerminalAnsi {
@@ -121,6 +121,8 @@ impl ClientRenderState {
                 seq,
                 repaint_pending,
             } => {
+                // Direct terminal clients never draw sized text.
+                crate::text_sizing::present::apply_fallback(&mut frame);
                 if !*repaint_pending && blit_encoder.is_current(&frame) {
                     crate::render_prof::event("prepare_frame.ansi.skip_current");
                     return None;
