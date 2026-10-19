@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(test)]
+mod text_sizing_tests;
+
 #[cfg(unix)]
 const MAX_RETIRED_DIRECT_GRAPHICS: usize = 64;
 
@@ -79,6 +82,8 @@ pub(super) struct ClientState {
     pub(super) deferred_local_activation: Option<endpoint::EndpointActivationIntent>,
     pub(super) draw_host_cursor: bool,
     pub(super) bold_color: Option<crate::config::BoldColorConfig>,
+    /// Sized text blocks drawn on the host terminal.
+    pub(super) text_sizing: crate::text_sizing::present::Presenter,
     pub(super) detached_process_children: Vec<std::process::Child>,
     pub(super) shell: Option<shell::ClientShellState>,
 }
@@ -141,6 +146,7 @@ impl ClientState {
             deferred_local_activation: None,
             draw_host_cursor: false,
             bold_color: None,
+            text_sizing: Default::default(),
             detached_process_children: Vec::new(),
             shell: Some(shell::ClientShellState::new(
                 shell::ClientShellConfig::from_config(&crate::config::Config::default()),
@@ -333,6 +339,15 @@ impl ClientState {
             || (self.kitty_graphics_enabled && !self.pending_native_cleanup.is_empty())
         {
             crate::render_prof::event("client_surface_patch.fallback.repaint");
+            return Ok(false);
+        }
+        if self.text_sizing.has_host_blocks()
+            || patch
+                .rows
+                .iter()
+                .any(|row| crate::text_sizing::present::cells_have_placeholder(&row.cells))
+        {
+            crate::render_prof::event("client_surface_patch.fallback.text_sizing");
             return Ok(false);
         }
         if let Some(rule) = self.bold_color {
@@ -580,23 +595,29 @@ impl ClientState {
         if let Some(rule) = self.bold_color {
             bold_color::apply(&mut frame_data.cells, rule);
         }
+        let text_sizing = self
+            .text_sizing
+            .prepare(&mut frame_data, crate::text_sizing::host_supported());
         let frame_data = if self.draw_host_cursor {
             render_ansi::frame_with_drawn_cursor(frame_data)
         } else {
             frame_data
         };
-        let encoded = if self.draw_host_cursor {
+        let mut encoded = if self.draw_host_cursor {
             self.blit_encoder
                 .encode_with_suppressed_visible_cursor(&frame_data, self.repaint_pending)
         } else {
             self.blit_encoder.encode(&frame_data, self.repaint_pending)
         };
+        self.text_sizing
+            .write_into(&text_sizing, encoded.full, &mut encoded.bytes);
         if let Err(error) = self.write_composed_output(writer, &encoded.bytes, graphics) {
             tracing::warn!(%error, "failed to present client frame");
             self.repaint_pending = true;
             return false;
         }
         self.blit_encoder.commit(frame_data, encoded);
+        self.text_sizing.commit(text_sizing);
         self.repaint_pending = false;
         true
     }

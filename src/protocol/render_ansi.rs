@@ -470,7 +470,7 @@ fn modifier_to_sgr_parts(val: u16) -> Vec<&'static str> {
 }
 
 /// Builds a complete SGR escape sequence for a cell's style.
-fn build_sgr(fg: u32, bg: u32, modifier: u16) -> String {
+pub(crate) fn build_sgr(fg: u32, bg: u32, modifier: u16) -> String {
     let mut parts = vec!["0".to_owned()];
     parts.extend(
         modifier_to_sgr_parts(modifier)

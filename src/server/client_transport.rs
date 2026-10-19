@@ -705,6 +705,8 @@ pub(crate) fn handle_client_handshake(
         }
     };
 
+    // Direct-terminal clients cannot draw sized text.
+    let mut text_sizing_supported = false;
     let (
         client_cols,
         client_rows,
@@ -772,6 +774,7 @@ pub(crate) fn handle_client_handshake(
                 write_endpoint_rejection(&mut stream, code, reason);
                 return Ok(());
             }
+            text_sizing_supported = hello.text_sizing;
             (
                 hello.surface_size.cols,
                 hello.surface_size.rows,
@@ -815,6 +818,10 @@ pub(crate) fn handle_client_handshake(
             return Ok(());
         }
     };
+
+    // Held until the connection's read loop below returns.
+    let _text_sizing_registration =
+        crate::text_sizing::ClientRegistration::new(text_sizing_supported);
 
     if should_quit.load(Ordering::Acquire) {
         return Ok(());
@@ -1481,6 +1488,7 @@ mod tests {
             surface_codecs: vec![crate::protocol::endpoint::SURFACE_CODEC_V1.into()],
             input_codecs: vec![crate::protocol::endpoint::INPUT_CODEC_V1.into()],
             blob_codecs: vec![crate::protocol::endpoint::BLOB_CODEC_V1.into()],
+            text_sizing: false,
         };
         ClientMessage::EndpointControl {
             kind: ENDPOINT_HELLO_KIND.into(),

@@ -210,6 +210,11 @@ fn run_client_with_mode(
     let kitty_graphics_enabled =
         loaded_config.config.kitty_graphics_enabled() && client_rendered_shell;
     let pixel_geometry_enabled = kitty_graphics_enabled || attach_escape.is_some();
+    crate::text_sizing::set_host_supported(
+        loaded_config.config.text_sizing_enabled()
+            && client_rendered_shell
+            && handshake::text_sizing_profile_allowed(),
+    );
     let endpoint_keybindings = shell_config
         .as_ref()
         .is_some_and(shell::ClientShellConfig::uses_endpoint_keybindings);
@@ -493,6 +498,7 @@ async fn run_client_loop(
         deferred_local_activation: None,
         draw_host_cursor,
         bold_color: config.bold_color,
+        text_sizing: Default::default(),
         detached_process_children: Vec::new(),
         shell: config.shell_config.map(shell::ClientShellState::new),
     };

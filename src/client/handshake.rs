@@ -100,6 +100,35 @@ fn direct_graphics_profile_allowed() -> bool {
     false
 }
 
+/// Kitty is the only host that implements the text sizing protocol. Unlike
+/// direct graphics, OSC 66 bytes survive SSH, but a host multiplexer in between
+/// would drop or misplace them.
+#[cfg(any(unix, test))]
+fn text_sizing_profile_values(
+    term: &str,
+    kitty_window: bool,
+    blocked_transport: bool,
+    terminals: bool,
+) -> bool {
+    (term == "xterm-kitty" || kitty_window) && !blocked_transport && terminals
+}
+
+/// Returns whether this client's host terminal can draw sized text.
+#[cfg(unix)]
+pub(super) fn text_sizing_profile_allowed() -> bool {
+    text_sizing_profile_values(
+        &std::env::var("TERM").unwrap_or_default(),
+        std::env::var_os("KITTY_WINDOW_ID").is_some(),
+        std::env::var_os("TMUX").is_some() || std::env::var_os("STY").is_some(),
+        io::stdin().is_terminal() && io::stdout().is_terminal(),
+    )
+}
+
+#[cfg(not(unix))]
+pub(super) fn text_sizing_profile_allowed() -> bool {
+    false
+}
+
 fn read_handshake_response(
     stream: &mut LocalStream,
     read_timeout: Duration,
@@ -211,6 +240,7 @@ pub(super) fn do_handshake(
             surface_codecs: vec![SURFACE_CODEC_V1.into()],
             input_codecs: vec![INPUT_CODEC_V1.into()],
             blob_codecs: vec![BLOB_CODEC_V1.into()],
+            text_sizing: crate::text_sizing::host_supported(),
         };
         ClientMessage::EndpointControl {
             kind: ENDPOINT_HELLO_KIND.into(),
@@ -482,5 +512,24 @@ mod tests {
         assert!(!direct_graphics_capability(true, true, (0, 16), supported));
         assert!(!direct_graphics_capability(true, true, (8, 0), supported));
         assert!(!direct_graphics_capability(true, true, (8, 16), false));
+    }
+
+    #[test]
+    fn text_sizing_profile_requires_kitty_host_outside_multiplexers() {
+        for (term, kitty_window, blocked_transport, terminals, expected) in [
+            ("xterm-kitty", false, false, true, true),
+            ("xterm-256color", true, false, true, true),
+            ("xterm-ghostty", false, false, true, false),
+            ("xterm-wezterm", false, false, true, false),
+            ("xterm-256color", false, false, true, false),
+            ("xterm-kitty", true, true, true, false),
+            ("xterm-kitty", true, false, false, false),
+        ] {
+            assert_eq!(
+                text_sizing_profile_values(term, kitty_window, blocked_transport, terminals),
+                expected,
+                "{term} window={kitty_window} blocked={blocked_transport} terminals={terminals}"
+            );
+        }
     }
 }

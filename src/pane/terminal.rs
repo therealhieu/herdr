@@ -17,6 +17,8 @@ use crate::protocol::CellData;
 
 #[cfg(test)]
 mod migration_tests;
+#[cfg(test)]
+mod text_sizing_tests;
 #[cfg(windows)]
 mod windows_recent_fallback;
 
@@ -210,6 +212,8 @@ pub(crate) struct GhosttyPaneCore {
     pub transient_default_color_owner_pgid: Option<u32>,
     pub default_color_tracker: DefaultColorOscTracker,
     pub default_color_event_tracker: DefaultColorEventTracker,
+    text_sizing_tracker: crate::text_sizing::tracker::TextSizingTracker,
+    text_sizing_nonce: u16,
     c1_xtgettcap_tracker: C1XtgettcapQueryTracker,
     pub child_default_foreground_changed: bool,
     pub child_default_background_changed: bool,
@@ -1196,6 +1200,8 @@ impl GhosttyPaneTerminal {
                 transient_default_color_owner_pgid: None,
                 default_color_tracker: DefaultColorOscTracker::default(),
                 default_color_event_tracker: DefaultColorEventTracker::default(),
+                text_sizing_tracker: Default::default(),
+                text_sizing_nonce: 0,
                 c1_xtgettcap_tracker: C1XtgettcapQueryTracker::default(),
                 child_default_foreground_changed: false,
                 child_default_background_changed: false,
@@ -1406,6 +1412,13 @@ impl GhosttyPaneTerminal {
         core.decscusr_tracker.observe(bytes);
         let in_progress_default_color_event = core.default_color_event_tracker.in_progress_event();
         let default_color_events = core.default_color_event_tracker.drain_pending();
+        let text_sizing_commands = if crate::text_sizing::is_active() {
+            core.text_sizing_tracker.observe(bytes);
+            core.text_sizing_tracker.drain_pending()
+        } else {
+            core.text_sizing_tracker.reset();
+            Vec::new()
+        };
         let synchronized_output_before = core
             .terminal
             .mode_get(crate::ghostty::MODE_SYNCHRONIZED_OUTPUT)
@@ -1417,6 +1430,7 @@ impl GhosttyPaneTerminal {
             default_color_events,
             in_progress_default_color_event,
             c1_xtgettcap_responses,
+            text_sizing_commands,
             &mut terminal_responses,
         );
         let terminal_bells = core.terminal.take_bell_count();
@@ -1495,6 +1509,7 @@ impl GhosttyPaneTerminal {
         default_color_events: Vec<DefaultColorTrackedEvent>,
         in_progress_default_color_event: Option<DefaultColorEvent>,
         c1_xtgettcap_responses: Vec<C1XtgettcapResponse>,
+        text_sizing_commands: Vec<crate::text_sizing::tracker::TextSizingCommand>,
         terminal_responses: &mut Vec<Bytes>,
     ) {
         // Only legacy C1 replies need merging; ordinary XTGETTCAP remains native.
@@ -1505,6 +1520,11 @@ impl GhosttyPaneTerminal {
                 c1_xtgettcap_responses
                     .into_iter()
                     .map(OrderedColorOrC1Event::C1),
+            )
+            .chain(
+                text_sizing_commands
+                    .into_iter()
+                    .map(OrderedColorOrC1Event::TextSizing),
             )
             .collect();
         events.sort_by_key(OrderedColorOrC1Event::end_offset);
@@ -1548,6 +1568,11 @@ impl GhosttyPaneTerminal {
                     if !response.suppress_native {
                         terminal_responses.push(response.bytes);
                     }
+                }
+                OrderedColorOrC1Event::TextSizing(command) => {
+                    terminal_responses.extend(libghostty_responses);
+                    let nonce = &mut core.text_sizing_nonce;
+                    crate::text_sizing::inject::apply(&mut core.terminal, &command, nonce);
                 }
             }
         }
@@ -3357,6 +3382,7 @@ fn ghostty_cell_style(
 enum OrderedColorOrC1Event {
     Color(DefaultColorTrackedEvent),
     C1(C1XtgettcapResponse),
+    TextSizing(crate::text_sizing::tracker::TextSizingCommand),
 }
 
 impl OrderedColorOrC1Event {
@@ -3364,6 +3390,7 @@ impl OrderedColorOrC1Event {
         match self {
             Self::Color(event) => event.end_offset,
             Self::C1(response) => response.end_offset,
+            Self::TextSizing(command) => command.end_offset,
         }
     }
 }

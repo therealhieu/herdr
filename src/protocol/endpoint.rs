@@ -43,6 +43,10 @@ fn default_true() -> bool {
     true
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndpointClientHello {
     pub generation: u32,
@@ -72,6 +76,9 @@ pub struct EndpointClientHello {
     pub input_codecs: Vec<String>,
     #[serde(default)]
     pub blob_codecs: Vec<String>,
+    /// The client's host terminal can draw kitty text sizing (OSC 66) blocks.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub text_sizing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -219,6 +226,7 @@ mod tests {
             surface_codecs: vec![SURFACE_CODEC_V1.into()],
             input_codecs: vec![INPUT_CODEC_V1.into()],
             blob_codecs: vec![BLOB_CODEC_V1.into()],
+            text_sizing: false,
         }
     }
 
@@ -369,6 +377,21 @@ mod tests {
         assert!(!decoded.surface_reuse);
         assert!(!decoded.surface_delta);
         assert!(!decoded.surface_scroll);
+    }
+
+    #[test]
+    fn text_sizing_hello_flag_is_optional_and_omitted_when_false() {
+        let value = serde_json::to_value(hello()).unwrap();
+        assert!(value.get("text_sizing").is_none());
+        let decoded: EndpointClientHello = serde_json::from_value(value).unwrap();
+        assert!(!decoded.text_sizing);
+
+        let mut supporting = hello();
+        supporting.text_sizing = true;
+        let value = serde_json::to_value(&supporting).unwrap();
+        assert_eq!(value["text_sizing"], serde_json::json!(true));
+        let decoded: EndpointClientHello = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded, supporting);
     }
 
     #[test]
