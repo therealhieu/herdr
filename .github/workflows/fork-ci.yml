@@ -3,11 +3,21 @@
 # macOS job; keep action pins and toolchain versions aligned on upstream sync.
 name: Fork CI
 
+# Skip document-only changes. Later patterns win: SKILL.md is compiled into the
+# binary (src/main.rs include_str!) and vendor/ docs are checked by maintenance tests.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+    paths: &code-paths
+      - "**"
+      - "!**/*.md"
+      - "!**/*.mdx"
+      - "!.s1mple/**"
+      - "skills/herdr/SKILL.md"
+      - "vendor/**"
   push:
     branches: [master]
+    paths: *code-paths
 
 permissions:
   contents: read
