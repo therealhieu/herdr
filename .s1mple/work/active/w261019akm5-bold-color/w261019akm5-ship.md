@@ -247,7 +247,7 @@ harden → Deliver
 | `V1` | Passed — `just test-one bold_color`, rule table tests green (8/8 in filter) |
 | `V2` | Passed — config parse tests green (`#f8dea6`, `bright`, missing, invalid) |
 | `V3` | Passed — frame recolor, unset byte-identical baseline, surface patch |
-| `V4` | `Pending` |
+| `V4` | Passed (PTY end-to-end, not visual) — dev client driven in a pseudo-terminal with isolated `XDG_CONFIG_HOME`; bold default emitted `0;1;38;2;248;222;166;49`, bold red `0;1;38;5;9;49`, plain red unchanged `0;38;5;1;49`; after `server reload-config` to `#ff00ff` bold default re-emitted `38;2;255;0;255` without restart; `bright` → `0;1;39;49`; unset → bold red back to `38;5;1`. Kitty's on-screen rendering itself not observed |
 | `V5` | Passed — `just lint && just test`: nextest 3917 passed / 14 skipped; Python 150 + 6 OK; Bun 0 failures |
 
 ### Overall Verification
