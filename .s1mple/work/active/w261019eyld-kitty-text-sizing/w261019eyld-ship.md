@@ -134,10 +134,10 @@ cell (1,1):     U+10EEED, M1, M1, M19, M100
 
 ### Status
 
-- **State:** `Ready`
-- **Position:** `Not started`
+- **State:** `In Progress`
+- **Position:** `G1`
 - **Work branch:** `feat/kitty-text-sizing`
-- **Base commit:** `Pending — recorded at execution start`
+- **Base commit:** `41461ad7`
 
 ### Sources
 
