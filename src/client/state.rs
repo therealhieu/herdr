@@ -78,6 +78,7 @@ pub(super) struct ClientState {
     /// Latest explicit Local selection awaiting this client's replacement Local connection.
     pub(super) deferred_local_activation: Option<endpoint::EndpointActivationIntent>,
     pub(super) draw_host_cursor: bool,
+    pub(super) bold_color: Option<crate::config::BoldColorConfig>,
     pub(super) detached_process_children: Vec<std::process::Child>,
     pub(super) shell: Option<shell::ClientShellState>,
 }
@@ -139,6 +140,7 @@ impl ClientState {
             presentation_frozen: false,
             deferred_local_activation: None,
             draw_host_cursor: false,
+            bold_color: None,
             detached_process_children: Vec::new(),
             shell: Some(shell::ClientShellState::new(
                 shell::ClientShellConfig::from_config(&crate::config::Config::default()),
@@ -324,7 +326,7 @@ impl ClientState {
 
     pub(super) fn present_surface_patch(
         &mut self,
-        patch: shell::ClientComposedSurfacePatch,
+        mut patch: shell::ClientComposedSurfacePatch,
     ) -> io::Result<bool> {
         if self.presentation_frozen
             || self.repaint_pending
@@ -332,6 +334,11 @@ impl ClientState {
         {
             crate::render_prof::event("client_surface_patch.fallback.repaint");
             return Ok(false);
+        }
+        if let Some(rule) = self.bold_color {
+            for row in &mut patch.rows {
+                bold_color::apply(&mut row.cells, rule);
+            }
         }
         let rows = if self.draw_host_cursor {
             let Some(rows) = self
@@ -569,6 +576,9 @@ impl ClientState {
         // Keep semantic links internally and restore native links when capture is off.
         if self.shell_mouse_capture_preference {
             frame_data.hyperlinks.clear();
+        }
+        if let Some(rule) = self.bold_color {
+            bold_color::apply(&mut frame_data.cells, rule);
         }
         let frame_data = if self.draw_host_cursor {
             render_ansi::frame_with_drawn_cursor(frame_data)

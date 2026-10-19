@@ -13,6 +13,7 @@
 //! - Displays sound/toast notifications forwarded from server
 
 mod attach;
+mod bold_color;
 mod catalog_reload;
 mod clipboard_forwarding;
 mod clipboard_images;
@@ -490,6 +491,7 @@ async fn run_client_loop(
         presentation_frozen: false,
         deferred_local_activation: None,
         draw_host_cursor,
+        bold_color: None,
         detached_process_children: Vec::new(),
         shell: config.shell_config.map(shell::ClientShellState::new),
     };
