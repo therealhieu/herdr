@@ -129,7 +129,7 @@ Design rules (documented in [AGENTS.md](../../AGENTS.md) "Principles"): state is
 
 - **Local Setup:** Rust toolchain from `rust-toolchain.toml`, `cargo-nextest`, `just`, Python 3, Bun, Node, and exactly Zig 0.16.0 (Homebrew ships a newer version; installed from ziglang.org at `~/.local/bin/zig`). Use rustup's `cargo`, not Homebrew's `rust` (uninstalled 2026-10-19): it ignores `rust-toolchain.toml`, and newer clippy lints fail `just lint`. Install hooks with `just install-hooks`. Windows cross-lint setup (`xwin`) is not used in this fork.
 - **Test Layers:** Rust unit tests next to code; integration tests in `tests/`; Python `unittest` and Bun tests for scripts, docs, and integration assets; ignored `bench-*` profiles for performance.
-- **CI Checks:** `.github/workflows/ci.yml` runs commit-subject validation, `just lint`, and `just ci-tests` across platforms. Upstream workflows such as `pr-gate.yml`, `preview.yml`, and `release.yml` target upstream; their behavior on this fork is not established.
+- **CI Checks:** On the fork, only `CI` (`ci.yml`: commit subjects, `just lint`, `just ci-tests` on Linux, macOS, and Windows) and `Nix` are active. The other upstream workflows are disabled in the repo's Actions settings (`gh workflow disable`), not by editing files, so upstream syncs stay conflict-free. A red Windows or Linux job is informational; the macOS job and local checks are the gate. New forks need a one-time "enable workflows" click on the Actions tab before anything runs.
 
 | Check | Working directory | Command or method | Source | Evidence |
 |---|---|---|---|---|
@@ -143,4 +143,3 @@ Design rules (documented in [AGENTS.md](../../AGENTS.md) "Principles"): state is
 - **Sources:** [AGENTS.md](../../AGENTS.md), [CONTRIBUTING.md](../../CONTRIBUTING.md), `Cargo.toml`, `rust-toolchain.toml`, `justfile`, `.githooks/`, `.github/workflows/ci.yml`, `.github/MAINTAINERS`, `git remote -v`, `gh repo set-default --view`.
 - **Open Questions:**
   - Fork release and distribution: not established. Upstream `herdr update` and channels point at upstream releases, so a custom build must be installed manually (for example `cargo install --path .`).
-  - Fork CI: unknown whether upstream workflows run or are useful on `therealhieu/herdr`.
