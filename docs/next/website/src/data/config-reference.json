@@ -451,7 +451,7 @@
           "key": "terminal.text_sizing",
           "type": "boolean",
           "default": "true",
-          "description": "Render kitty text sizing protocol (OSC 66) sized text when the outer terminal is kitty. Set false to keep dropping OSC 66 so applications fall back to unsized text. Takes effect on the next attach."
+          "description": "Advertise kitty text sizing protocol (OSC 66) support from this client when the outer terminal is kitty. The server sizes OSC 66 text while at least one attached client supports it; set false to stop this client advertising support. The client reads this setting, so in remote sessions local client configuration controls it. Takes effect on the next attach."
         }
       ]
     },
