@@ -25,7 +25,7 @@ The goal is a custom version that can still absorb upstream releases cheaply.
 2. **Upstream maintainer-only rules do not apply.** `therealhieu` is not in `.github/MAINTAINERS`, so skip "Maintainer Workflow", "Local Can Machine Workflow", and "Release Channels".
 3. **Never contribute to upstream.** Do not push, open PRs, or open issues on `herdrdev/herdr`. The `gh` default repo is `therealhieu/herdr` (`gh repo set-default`); confirm with `gh repo set-default --view` in a fresh clone.
 4. **Minimize the diff against upstream.** Prefer new files and modules over editing upstream hot files. When an upstream file must change, keep the edit small and local.
-5. **Leave upstream-owned files alone** unless the change requires it: `AGENTS.md`/`CLAUDE.md`, `README*.md`, `CHANGELOG.md`, `docs/`, `distribution/`, `skills/herdr/SKILL.md`, `.github/`. Put fork guidance in `.s1mple/`.
+5. **Leave upstream-owned files alone** unless the change requires it: `AGENTS.md`/`CLAUDE.md`, `README*.md`, `CHANGELOG.md`, `docs/`, `distribution/`, `skills/herdr/SKILL.md`, existing files in `.github/`. Put fork guidance in `.s1mple/`; add fork-only files (such as `fork-ci.yml`) instead of editing upstream ones.
 6. **Record every customization** in [Fork Customizations](#fork-customizations) so upstream syncs know what to protect.
 7. **Sync by merge.** Bring upstream in with `git fetch upstream && git merge upstream/master` on a sync branch, run `just lint && just test`, then merge into fork `master`. Do not rebase fork `master`; it is published.
 8. **macOS only.** The fork serves one user on macOS. Verify on macOS only; skip Windows checks (`just windows-lint`, `just check`'s Windows stage, xwin). Still follow upstream compile-gating rules so upstream code keeps merging cleanly.
@@ -35,6 +35,7 @@ The goal is a custom version that can still absorb upstream releases cheaply.
 | Change | Files touched | Upstream conflict risk | Notes |
 |---|---|---|---|
 | s1mple workspace | `.s1mple/` | None (fork-only directory) | Agent guidance for this fork |
+| macOS-only CI | `.github/workflows/fork-ci.yml` (new file); upstream workflows disabled in repo settings | None for the file; on sync, re-align its action pins, Rust, Zig, and Bun versions with upstream `ci.yml` | Mirrors upstream `ci.yml` macOS job |
 
 ## Technology Stack
 
@@ -129,7 +130,7 @@ Design rules (documented in [AGENTS.md](../../AGENTS.md) "Principles"): state is
 
 - **Local Setup:** Rust toolchain from `rust-toolchain.toml`, `cargo-nextest`, `just`, Python 3, Bun, Node, and exactly Zig 0.16.0 (Homebrew ships a newer version; installed from ziglang.org at `~/.local/bin/zig`). Use rustup's `cargo`, not Homebrew's `rust` (uninstalled 2026-10-19): it ignores `rust-toolchain.toml`, and newer clippy lints fail `just lint`. Install hooks with `just install-hooks`. Windows cross-lint setup (`xwin`) is not used in this fork.
 - **Test Layers:** Rust unit tests next to code; integration tests in `tests/`; Python `unittest` and Bun tests for scripts, docs, and integration assets; ignored `bench-*` profiles for performance.
-- **CI Checks:** On the fork, only `CI` (`ci.yml`: commit subjects, `just lint`, `just ci-tests` on Linux, macOS, and Windows) and `Nix` are active. The other upstream workflows are disabled in the repo's Actions settings (`gh workflow disable`), not by editing files, so upstream syncs stay conflict-free. A red Windows or Linux job is informational; the macOS job and local checks are the gate. New forks need a one-time "enable workflows" click on the Actions tab before anything runs.
+- **CI Checks:** Only the fork-only `Fork CI` (`.github/workflows/fork-ci.yml`) runs: one macOS job with PR-title validation and `just ci 'not binary(live_handoff)'` (lint + tests), on PRs and `master` pushes. All upstream workflows, including `CI` and `Nix`, are disabled in the repo's Actions settings (`gh workflow disable`), not by editing their files, so upstream syncs stay conflict-free. New forks need a one-time "enable workflows" click on the Actions tab before anything runs.
 
 | Check | Working directory | Command or method | Source | Evidence |
 |---|---|---|---|---|
