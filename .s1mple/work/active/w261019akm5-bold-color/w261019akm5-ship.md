@@ -115,7 +115,7 @@ Not applicable — no UI.
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `Harden`
+- **Position:** `Deliver`
 - **Work branch:** `feat/bold-color`
 - **Base commit:** `7c59eab9`
 
@@ -258,17 +258,20 @@ harden → Deliver
 
 ### Harden
 
-- **Report:** `reports/harden-report.md` — `Pending`
-- **Result:** `Pending`
+- **Report:** `reports/harden-report.md` — `d72ffee4`, resolution `b4ee5192`
+- **Result:** 1 Minor finding (`HRD-1`, reload of `bold_color` not asserted) — `Fixed` in `c320048d`; `just lint && just test` passed after the fix
 
 ### Deliver Evidence
 
-- **Project document:** `Pending`
-- **Delivery actions:** `Pending`
+- **Project document:** `.s1mple/docs/project.md` Fork Customizations row (G1-T4) and Last Modified — `a1a2a05f`
+- **Delivery actions:** Pending user authorization to push `feat/bold-color` to `origin` and open a fork PR; `V4` manual kitty check pending with the user
 
 ### Blockers, Deviations, and Replacements
 
-`Pending`
+- **Decision change (`Q1`):** `A7` was wrong — `scripts/test_config_reference_check.py:253` runs the reference check in every `just test`. The user chose to add a `ui.bold_color` entry to `docs/next/website/src/data/config-reference.json` (`1bc58df1`). Its `values` read `bright`/`rgb` because the checker derives them from enum variants; upstream does the same for `terminal.new_cwd`.
+- **Test placement:** presentation tests live in `src/client/bold_color.rs` to keep upstream edits small.
+- **Fidelity limit:** server-side inverse resolution means bold inverse default-color cells do not take the bold color as background, unlike Ghostty (harden Limits).
+- **Replacements:** None
 
 ### Completion Summary
 
