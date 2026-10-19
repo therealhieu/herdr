@@ -135,7 +135,7 @@ cell (1,1):     U+10EEED, M1, M1, M19, M100
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `G1`
+- **Position:** `G2`
 - **Work branch:** `feat/kitty-text-sizing`
 - **Base commit:** `41461ad7`
 
@@ -279,7 +279,7 @@ harden → Deliver
 
 | Group | Directory | Task commits | Verification report → status, SHA | Findings → fix SHAs | Merge SHA | Result |
 |---|---|---|---|---|---|---|
-| `G1` | `Pending` | `Pending` | `reports/g1-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
+| `G1` | main tree | T1 `f109a14b`, `6f3326a5`; T2 `b1dda237`; T3 `25d89a28`; T4 `7d0e37e5` | `reports/g1-verification-report.md` — `Failed` (1 Minor), `80958df5` | `G1-VER1` → `54d3804d` (tracker reset while inactive; `just test` 3939 passed) | Not applicable — main tree | `Accepted` |
 | `G2` | `Pending` | `Pending` | `reports/g2-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
 | `G3` | `Pending` | `Pending` | `reports/g3-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
 
