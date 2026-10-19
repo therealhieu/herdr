@@ -135,7 +135,7 @@ cell (1,1):     U+10EEED, M1, M1, M19, M100
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `Harden`
+- **Position:** `Deliver`
 - **Work branch:** `feat/kitty-text-sizing`
 - **Base commit:** `41461ad7`
 
@@ -306,8 +306,8 @@ harden → Deliver
 
 ### Harden
 
-- **Report:** `reports/harden-report.md` — `Pending`
-- **Result:** `Pending`
+- **Report:** `reports/harden-report.md` — `Findings identified` (1 Minor, Principles), `7dbd99b6`; checks `just lint` clean, workflow-leak scan clean, `just test` 3956 passed
+- **Result:** `HRD-1` (text sizing tests inside upstream hot files) → `Fixed` in `0b137674`. The tests moved to child modules `src/pane/terminal/text_sizing_tests.rs`, `src/client/state/text_sizing_tests.rs` and `src/server/render_stream/text_sizing_tests.rs`. The fork-added lines in those three upstream files dropped from +527 to +55, and the text sizing test count is unchanged at 39. `just lint && just test` passed (3956). Resolution recorded in `e139735d`.
 
 ### Deliver Evidence
 
