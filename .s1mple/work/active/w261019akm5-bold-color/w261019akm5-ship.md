@@ -37,7 +37,7 @@
 
 - **Prompt:** Add a client-side `[ui] bold_color` setting that mirrors Ghostty's `bold-color`, so bold text looks the same in kitty (which has no such option) as in Ghostty (`bold-color = #f8dea6`).
 - **Goal:** With `[ui] bold_color = "#f8dea6"`, the herdr TUI client draws bold default-foreground text in `#f8dea6` and bold palette colors 0–7 as their bright variants; with the key unset, output is byte-for-byte unchanged.
-- **Scope:** config key, client frame and surface-patch presentation, live config reload · **Non-goals:** server-side `TerminalAnsi` encoding, direct terminal attach passthrough, `docs/` config reference, wire protocol changes.
+- **Scope:** config key, client frame and surface-patch presentation, live config reload · **Non-goals:** server-side `TerminalAnsi` encoding, direct terminal attach passthrough, other `docs/` edits beyond the `Q1` config-reference entry, wire protocol changes.
 - **UI:** `not needed — no new screen, component, or interaction; the change recolors existing cells by a fixed rule copied from Ghostty`
 
 ```text
@@ -115,7 +115,7 @@ Not applicable — no UI.
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `Overall verification`
+- **Position:** `Harden`
 - **Work branch:** `feat/bold-color`
 - **Base commit:** `7c59eab9`
 
@@ -252,9 +252,9 @@ harden → Deliver
 
 ### Overall Verification
 
-- **Report:** `reports/overall-verification-report.md` — `Pending`
-- **Result and report SHA:** `Pending`
-- **Findings → fix SHAs:** `Pending`
+- **Report:** `reports/overall-verification-report.md` — `Passed`
+- **Result and report SHA:** `Passed`, `f680c40d`; 0 findings; `REQ4` Unverified pending manual `V4`
+- **Findings → fix SHAs:** None
 
 ### Harden
 
