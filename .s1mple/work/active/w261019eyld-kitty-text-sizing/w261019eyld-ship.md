@@ -135,7 +135,7 @@ cell (1,1):     U+10EEED, M1, M1, M19, M100
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `Overall verification`
+- **Position:** `Harden`
 - **Work branch:** `feat/kitty-text-sizing`
 - **Base commit:** `41461ad7`
 
@@ -300,9 +300,9 @@ harden → Deliver
 
 ### Overall Verification
 
-- **Report:** `reports/overall-verification-report.md` — `Pending`
-- **Result and report SHA:** `Pending`
-- **Findings → fix SHAs:** `Pending`
+- **Report:** `reports/overall-verification-report.md` — `Failed` (3 Minor, no Critical/Major); `V1`–`V7`, `V10` passed (`just lint` clean, `just test` 3953 passed); `V8`/`V9` evidence accepted; fork constraints confirmed (no fixture/`wire.rs` change).
+- **Result and report SHA:** `Failed` → remediated; report `3e4ed48a`
+- **Findings → fix SHAs:** `OVR-VER1` → `32b01714`, `f4ab7809` (plain-text shortcut regression test, fails with shortcut disabled); `OVR-VER2` → `3c18f093` (history snapshot → `seed_history_ansi` restores intact blocks incl. a 62-mark cell; fails if the snapshot decodes); `OVR-VER3` → ship clarification `35a9ffcc` (`REQ7` wording) + `87d8ac41` (allocation-free presenter fast path, gating test, release profiles: presenter no-block 2.7 µs (1 pane) / 2.4 µs (15 panes) at 4672 cells, `apply_fallback` 2.5 / 2.4 µs, tracker inactive 83 ns per round, active ~2 GB/s per pane, flat from 1 to 15 panes). `just test` 3955 passed after `OVR-VER2`.
 
 ### Harden
 
