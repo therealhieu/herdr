@@ -7910,7 +7910,11 @@ mod tests {
                 vec![(0, 0, "\u{6f22}".to_string())],
             ),
             ("\x1b]66;w=1;ab\x07", 2, vec![(0, 0, "ab".to_string())]),
-            ("\x1b]66;n=1:d=2:w=1;a\x07", 2, vec![(0, 0, "a".to_string())]),
+            (
+                "\x1b]66;n=1:d=2:w=1;a\x07",
+                2,
+                vec![(0, 0, "a".to_string())],
+            ),
             (
                 "\x1b]66;n=1:d=2;ab\x07",
                 3,
