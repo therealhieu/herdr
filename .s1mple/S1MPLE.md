@@ -78,9 +78,10 @@ After overall verification passes and before project documentation finalization,
 
 - Use lowercase conventional commits with no AI co-author lines. Propose the commit message and get approval before committing.
 - Push only to `origin` (`therealhieu/herdr`). Open PRs only on the fork with `gh pr create --base master` (`gh` defaults to `therealhieu/herdr`; check with `gh repo set-default --view`).
+- Wait for `Fork CI` on the PR (`gh pr checks --watch`); its single macOS job must pass. Document-only PRs get no check and need none.
 - Never push, open PRs, or open issues on `herdrdev/herdr`.
 - Do not use upstream release commands (`just preview`, `just release*`).
-- Upstream sync: merge `upstream/master` into a sync branch, resolve conflicts against [Fork Customizations](docs/project.md#fork-customizations), run `just lint && just test`, then merge into fork `master`.
+- Upstream sync: merge `upstream/master` into a sync branch, resolve conflicts against [Fork Customizations](docs/project.md#fork-customizations), re-align `fork-ci.yml` with upstream `ci.yml` toolchain versions, run `just lint && just test`, then merge into fork `master`.
 
 ## 4. Workspace Layout
 
