@@ -446,6 +446,12 @@
           "type": "boolean",
           "default": "true",
           "description": "Render pane images in Kitty graphics-compatible outer terminals. Applications use the standard Kitty graphics protocol through pane terminal output; the external socket pane-overlay API is no longer available. Set false to disable graphics rendering. Restart the server or reattach the client after changing it. In remote sessions, server configuration controls Kitty graphics parsing while local client configuration controls outer-terminal output."
+        },
+        {
+          "key": "terminal.text_sizing",
+          "type": "boolean",
+          "default": "true",
+          "description": "Render kitty text sizing protocol (OSC 66) sized text when the outer terminal is kitty. Set false to keep dropping OSC 66 so applications fall back to unsized text. Takes effect on the next attach."
         }
       ]
     },

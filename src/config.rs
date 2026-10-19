@@ -104,6 +104,10 @@ impl Config {
             .unwrap_or(true)
     }
 
+    pub fn text_sizing_enabled(&self) -> bool {
+        self.terminal.text_sizing.unwrap_or(true)
+    }
+
     pub fn prefix_keys(&self) -> Vec<(KeyCode, KeyModifiers)> {
         self.validated_keybinds().1
     }

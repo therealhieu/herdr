@@ -211,7 +211,9 @@ fn run_client_with_mode(
         loaded_config.config.kitty_graphics_enabled() && client_rendered_shell;
     let pixel_geometry_enabled = kitty_graphics_enabled || attach_escape.is_some();
     crate::text_sizing::set_host_supported(
-        client_rendered_shell && handshake::text_sizing_profile_allowed(),
+        loaded_config.config.text_sizing_enabled()
+            && client_rendered_shell
+            && handshake::text_sizing_profile_allowed(),
     );
     let endpoint_keybindings = shell_config
         .as_ref()

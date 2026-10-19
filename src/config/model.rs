@@ -260,6 +260,8 @@ pub struct TerminalConfig {
     pub new_cwd: NewTerminalCwdConfig,
     /// Render Kitty graphics in compatible outer terminals. Default: true.
     pub kitty_graphics: Option<bool>,
+    /// Render kitty text sizing (OSC 66) blocks when the outer terminal is kitty. Default: true.
+    pub text_sizing: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2055,6 +2057,20 @@ kitty_graphics = false
         )
         .unwrap();
         assert!(!config.kitty_graphics_enabled());
+    }
+
+    #[test]
+    fn text_sizing_default_on_with_opt_out() {
+        assert!(Config::default().text_sizing_enabled());
+
+        let config: Config = toml::from_str(
+            r#"
+[terminal]
+text_sizing = false
+"#,
+        )
+        .unwrap();
+        assert!(!config.text_sizing_enabled());
     }
 
     #[test]
