@@ -73,11 +73,11 @@ Keep the test names, so `just test-one text_sizing` still selects them.
 
 Workflow mode only. The implementer fills this section; the sections above stay unchanged.
 
-- **Status:** `Pending`
+- **Status:** `Completed`
 
 | Finding | Change | Verification | Commit | Result |
 |---|---|---|---|---|
-| `HRD-1` | `Pending` | `Pending` | `Pending` | `Pending` |
+| `HRD-1` | Moved the text sizing tests into child modules `src/pane/terminal/text_sizing_tests.rs`, `src/client/state/text_sizing_tests.rs`, and `src/server/render_stream/text_sizing_tests.rs`. Each upstream file keeps only `#[cfg(test)] mod text_sizing_tests;`, placed next to its existing top-of-file items instead of the end of the file, where upstream appends. Test names, bodies, and assertions are unchanged; only module paths and `use` lines changed. | `just test-one text_sizing` → 39 run, 39 passed, before and after the move. Test function names are identical. Moved bodies match the removed lines apart from indentation and the old module wrapper. `git diff --stat 41461ad7 -- src/pane/terminal.rs src/client/state.rs src/server/render_stream.rs` dropped from +527 to +55 lines. | `0b137674` | `Fixed` |
 
-- **Final checks:** `Pending`
-- **Remaining issues:** `Pending`
+- **Final checks:** `just lint` → Passed (fmt check and clippy `-D warnings` clean). `just test` → Passed, exit 0 (nextest 3956 passed, 16 skipped; maintenance, UI hot-path, integration-asset, and docs-contract suites passed). `just test-one text_sizing` → 39 passed.
+- **Remaining issues:** None
