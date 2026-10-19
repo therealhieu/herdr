@@ -114,8 +114,8 @@ Not applicable — no UI.
 
 ### Status
 
-- **State:** `In Progress`
-- **Position:** `Deliver`
+- **State:** `Completed`
+- **Position:** `Completed`
 - **Work branch:** `feat/bold-color`
 - **Base commit:** `7c59eab9`
 
@@ -264,7 +264,7 @@ harden → Deliver
 ### Deliver Evidence
 
 - **Project document:** `.s1mple/docs/project.md` Fork Customizations row (G1-T4) and Last Modified — `a1a2a05f`
-- **Delivery actions:** Pending user authorization to push `feat/bold-color` to `origin` and open a fork PR; `V4` manual kitty check pending with the user
+- **Delivery actions:** User authorized push and PR. Pushed `feat/bold-color` to `origin`; opened https://github.com/therealhieu/herdr/pull/3 (`gh pr create --base master`). `Fork CI` `check (macos)` passed on `cc51a837` in 6m03s; CodeRabbit skipped (manual review required). Not merged — merge is the user's call. User viewed the live dev build in kitty and accepted it
 
 ### Blockers, Deviations, and Replacements
 
@@ -275,7 +275,7 @@ harden → Deliver
 
 ### Completion Summary
 
-`Pending`
+`[ui] bold_color` ships on `feat/bold-color` (PR #3). `"#rrggbb"` draws bold default-color text in that color and bold palette 0–7 as 8–15; `"bright"` does only the palette change; unset is byte-identical to before. It applies on both client presentation paths and reloads live. `REQ1`–`REQ4` are met: `V1`–`V3` and `V5` passed in tests, `V4` passed end to end in a PTY and the user confirmed it visually in kitty. G1 and overall verification found nothing; harden found one Minor test gap, fixed. One decision changed during execution (`Q1`: add the config-reference entry). Known limit: bold inverse default-color cells do not take the bold color as background, because herdr resolves inverse server-side.
 
 ## Ship File Check
 
