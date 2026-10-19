@@ -7877,4 +7877,59 @@ mod tests {
         );
         assert!(text_sizing_cells(&pane).is_empty());
     }
+
+    #[test]
+    fn text_sizing_unsized_commands_write_plain_text() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        let first_row = |pane: &GhosttyPaneTerminal| -> String {
+            let core = pane.core.lock().unwrap();
+            let rows = core.terminal.screen_text_rows().unwrap();
+            rows[0]
+                .cells
+                .iter()
+                .flat_map(|cell| cell.graphemes.iter().filter_map(|&cp| char::from_u32(cp)))
+                .collect()
+        };
+        for (probe, expected_col, text) in [
+            ("\x1b]66;w=1;\u{223c}\x07", 2, "\u{223c}"),
+            ("\x1b]66;w=1;\u{2502}\x07", 2, "\u{2502}"),
+            ("\x1b]66;;ab\x07", 3, "ab"),
+            ("\x1b]66;s=1:w=0;ab\x07", 3, "ab"),
+        ] {
+            let (pane, tx) = text_sizing_pane(10, 4);
+            let report = text_sizing_write_and_report(&pane, &tx, probe.as_bytes());
+            assert_eq!(report, (1, expected_col), "probe {probe:?}");
+            assert!(text_sizing_cells(&pane).is_empty(), "probe {probe:?}");
+            assert_eq!(first_row(&pane).trim_end(), text, "probe {probe:?}");
+        }
+
+        for (probe, expected_col, expected_blocks) in [
+            (
+                "\x1b]66;w=1;\u{6f22}\x07",
+                2,
+                vec![(0, 0, "\u{6f22}".to_string())],
+            ),
+            ("\x1b]66;w=1;ab\x07", 2, vec![(0, 0, "ab".to_string())]),
+            ("\x1b]66;n=1:d=2:w=1;a\x07", 2, vec![(0, 0, "a".to_string())]),
+            (
+                "\x1b]66;n=1:d=2;ab\x07",
+                3,
+                vec![(0, 0, "a".to_string()), (0, 1, "b".to_string())],
+            ),
+            (
+                "\x1b]66;s=2;ab\x07",
+                5,
+                vec![(0, 0, "a".to_string()), (0, 2, "b".to_string())],
+            ),
+        ] {
+            let (pane, tx) = text_sizing_pane(10, 4);
+            let report = text_sizing_write_and_report(&pane, &tx, probe.as_bytes());
+            assert_eq!(report, (1, expected_col), "probe {probe:?}");
+            assert_eq!(
+                text_sizing_intact_blocks(&pane),
+                expected_blocks,
+                "probe {probe:?}"
+            );
+        }
+    }
 }
