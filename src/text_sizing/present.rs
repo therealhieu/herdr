@@ -286,7 +286,14 @@ fn draw_block(out: &mut Vec<u8>, block: &HostBlock) {
     if meta.horizontal != 0 {
         let _ = write!(out, ":h={}", meta.horizontal);
     }
-    let _ = write!(out, ";{}\x1b\\", meta.text);
+    out.push(b';');
+    // Decoding already rejects control characters; never let one end or
+    // escape the OSC payload.
+    for ch in meta.text.chars().filter(|ch| !ch.is_control()) {
+        let mut utf8 = [0u8; 4];
+        out.extend_from_slice(ch.encode_utf8(&mut utf8).as_bytes());
+    }
+    out.extend_from_slice(b"\x1b\\");
 }
 
 #[cfg(test)]
@@ -464,6 +471,47 @@ mod tests {
         // A full redraw at a smaller size clamps erases to the new frame.
         let (_, pre, _) = present(&mut presenter, blank_frame(2, 2), true, true);
         assert_eq!(pre, "\x1b[0m\x1b[2;2H\x1b[1X");
+    }
+
+    #[test]
+    fn forged_control_text_never_reaches_the_host() {
+        // A 1x7 block whose top-left text is `ESC ] 52 ; c ; Q BEL ESC \ CSI(C1)`.
+        let mut origin = String::from(crate::text_sizing::cell::BASE);
+        let payload = [0x1b, 93, 53, 50, 59, 99, 59, 81, 0x07, 0x1b, 92, 121, 35];
+        let marks = [0, 0, 0, 7, 15, 0, 0, 0].into_iter().chain(payload);
+        origin.extend(marks.filter_map(|value| char::from_u32(0xE0100 + value)));
+        let mut frame = blank_frame(8, 1);
+        place(&mut frame, 0, 0, 7, &meta(1, 7, "x"));
+        cell_mut(&mut frame, 0, 0).symbol = origin;
+
+        let mut presenter = Presenter::default();
+        let (supported, pre, post) = present(&mut presenter, frame.clone(), true, true);
+        assert_eq!((pre.as_str(), post.as_str()), ("", ""));
+        let mut fallback = frame;
+        apply_fallback(&mut fallback);
+        for frame in [supported, fallback] {
+            for cell in &frame.cells {
+                assert!(!cell.skip);
+                assert!(!cell.symbol.chars().any(char::is_control), "{cell:?}");
+                assert!(!is_placeholder(&cell.symbol), "{cell:?}");
+            }
+        }
+
+        // The payload writer drops control characters on its own.
+        let block = HostBlock {
+            x: 0,
+            y: 0,
+            nonce: 7,
+            meta: meta(1, 1, "a\u{1b}\\\u{7}b\u{9b}"),
+            style: (0, 0, 0),
+        };
+        let mut out = Vec::new();
+        draw_block(&mut out, &block);
+        let expected = format!(
+            "\x1b[1;1H{}\x1b]66;s=1:w=1;a\\b\x1b\\",
+            render_ansi::build_sgr(0, 0, 0)
+        );
+        assert_eq!(text(&out), expected);
     }
 
     #[test]

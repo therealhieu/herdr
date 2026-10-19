@@ -6,7 +6,9 @@
 //! the top-left cell (`row == col == 0`) adds `scale * 8 + width`, the
 //! fractional numerator and denominator, `vertical * 3 + horizontal`, and the
 //! block text as base-120 digits (a digit below 120 ends a codepoint, digits
-//! `120..240` continue it).
+//! `120..240` continue it). Block text never holds a control character
+//! (C0, `DEL`, or C1): encoding skips them and decoding rejects them, because
+//! any pane can print a placeholder and its text reaches the host terminal.
 
 /// Base codepoint of every placeholder cell (Plane 16 private use, width 1).
 pub(crate) const BASE: char = '\u{10EEED}';
@@ -76,8 +78,8 @@ pub(crate) fn is_placeholder(grapheme: &str) -> bool {
 }
 
 /// Encodes one placeholder cell. `meta` is written only for the top-left
-/// cell; its text is truncated at a codepoint to fit the mark limit and
-/// kitty's codepoint limit.
+/// cell; control characters are skipped and its text is truncated at a
+/// codepoint to fit the mark limit and kitty's codepoint limit.
 pub(crate) fn encode_cell(row: u8, col: u8, nonce: u16, meta: Option<&BlockMeta>) -> String {
     let nonce = nonce % NONCE_LIMIT;
     let mut marks: Vec<u32> = Vec::with_capacity(MAX_MARKS);
@@ -97,7 +99,8 @@ pub(crate) fn encode_cell(row: u8, col: u8, nonce: u16, meta: Option<&BlockMeta>
             u32::from(alignment(meta.vertical)) * 3 + u32::from(alignment(meta.horizontal)),
         ]);
         let mut digits = [0u32; MAX_TEXT_DIGITS];
-        for ch in meta.text.chars().take(MAX_TEXT_CODEPOINTS) {
+        let text = meta.text.chars().filter(|ch| !ch.is_control());
+        for ch in text.take(MAX_TEXT_CODEPOINTS) {
             let count = text_digits(u32::from(ch), &mut digits);
             if marks.len() + count > MAX_MARKS {
                 break;
@@ -112,7 +115,8 @@ pub(crate) fn encode_cell(row: u8, col: u8, nonce: u16, meta: Option<&BlockMeta>
     encoded
 }
 
-/// Decodes a placeholder grapheme, or returns `None` when it is malformed.
+/// Decodes a placeholder grapheme, or returns `None` when it is malformed or
+/// its text holds a control character.
 pub(crate) fn decode(grapheme: &str) -> Option<Placeholder> {
     if !is_placeholder(grapheme) {
         return None;
@@ -215,7 +219,11 @@ fn decode_text_digits(marks: &[u8]) -> Option<String> {
         if mark >= TEXT_DIGIT_BASE {
             value = value * TEXT_DIGIT_BASE + (mark - TEXT_DIGIT_BASE);
         } else {
-            text.push(char::from_u32(value * TEXT_DIGIT_BASE + mark)?);
+            let ch = char::from_u32(value * TEXT_DIGIT_BASE + mark)?;
+            if ch.is_control() {
+                return None;
+            }
+            text.push(ch);
             value = 0;
             digits = 0;
         }
@@ -322,5 +330,26 @@ mod tests {
         ] {
             assert_eq!(decode(grapheme), None, "grapheme {grapheme:?}");
         }
+    }
+
+    #[test]
+    fn block_text_never_holds_control_characters() {
+        // Header for a 1x1 block, `a`, then the forged base-120 text digits.
+        let header = [0, 0, 0, 9, 9, 0, 0, 0, u32::from(b'a')];
+        for (name, digits) in [
+            ("ESC", &[0x1b][..]),
+            ("BEL", &[0x07]),
+            ("DEL", &[0x7f]),
+            ("C1 CSI", &[121, 35]),
+        ] {
+            let mut forged = String::from(BASE);
+            let marks = header.iter().chain(digits);
+            forged.extend(marks.filter_map(|&value| mark_char(value)));
+            assert_eq!(decode(&forged), None, "{name}");
+        }
+
+        let encoded = encode_cell(0, 0, 9, Some(&meta("a\u{1b}]52\u{7}b\u{9b}")));
+        let decoded = decode(&encoded).and_then(|cell| cell.meta);
+        assert_eq!(decoded.map(|meta| meta.text), Some("a]52b".to_string()));
     }
 }
