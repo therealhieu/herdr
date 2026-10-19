@@ -55,8 +55,9 @@ after:  pane cell (bold, fg=default) → apply bold_color → BlitEncoder → "\
 | `A4` | Pane cells only, or the whole frame? | Whole composed frame, like Ghostty, which recolors everything it draws. The client cannot tell pane cells from herdr chrome after composition | `REQ1`, `DES2` |
 | `A5` | Value format? | Unset (default), `"bright"`, or `"#rrggbb"`, matching Ghostty's accepted forms | `REQ3`, `DES1` |
 | `A6` | Invalid value handling? | Same as other typed `[ui]` keys: serde rejects the `[ui]` section and the loader reports it — `src/config/io.rs:553` | `DES1` |
-| `A7` | Document in `docs/next` config reference? | No. Fork policy leaves `docs/` alone; `config_reference_check.py` runs only in `release-docs-check`, which the fork does not use — `justfile:142`, `.s1mple/docs/project.md` Fork Policy 5 | `DES4` |
+| `A7` | Document in `docs/next` config reference? | ~~No~~ Superseded by `Q1`: the assumption that `config_reference_check.py` runs only in `release-docs-check` was wrong; `scripts/test_config_reference_check.py:253` runs it in every `just test` | `DES4` |
 | `A8` | Performance? | One integer pass over cells per presented frame or patch, client-side, independent of pane count; skipped entirely when unset. No 1-vs-15-pane benchmark: `bench-render-scale` measures server render work, which does not change | `DES2`, `V3` |
+| `Q1` | During G1, `just test` failed because `ui.bold_color` is missing from the config reference. How should the fork satisfy the check? | Add a `ui.bold_color` entry to `docs/next/website/src/data/config-reference.json` (user chose the recommended option over `pub(crate)` or a checker exception) | `DES4` |
 
 ### Requirements
 
@@ -82,7 +83,7 @@ Not applicable — no UI.
 | `DES1` | New `src/config/bold_color.rs`: `BoldColorConfig { Bright, Rgb(u8, u8, u8) }` with a serde string deserializer (`"bright"` or `#rrggbb`), plus `bold_color: Option<BoldColorConfig>` on `UiConfig` (default `None`) in `src/config/model.rs`; re-export from `src/config.rs` | `REQ1`, `REQ2`, `REQ3` | New file keeps the upstream diff to a field, a default, and a re-export |
 | `DES2` | New `src/client/bold_color.rs`: `apply(cells: &mut [CellData], rule: BoldColorConfig)` rewrites `CellData.fg` for cells with the bold modifier bit: reset → packed RGB (`Rgb` only); named 0x01–0x08 → +8; indexed 0–7 → +8. Called in `ClientState::try_present_frame_to` on `frame_data.cells` and in `present_surface_patch` on each row's cells, before encoding, only when `Some` | `REQ1`, `REQ2`, `REQ3` | Both client presentation paths feed `BlitEncoder`; transforming before encode keeps the encoder's committed frame consistent for diffing |
 | `DES3` | `ClientState.bold_color: Option<BoldColorConfig>`, set from `ClientLoopConfig` at startup and from `reload_local_client_config` when `[ui]` is valid; the existing reload recompose then presents a recolored frame through the encoder diff | `REQ4` | Follows the `draw_host_cursor` pattern — `src/client/config_reload.rs:118` |
-| `DES4` | Record the customization in `.s1mple/docs/project.md` Fork Customizations; no `docs/` edits | `REQ1` | Fork policy 5 and 6 |
+| `DES4` | Record the customization in `.s1mple/docs/project.md` Fork Customizations, and add a `ui.bold_color` entry to `docs/next/website/src/data/config-reference.json` beside the other `ui.*` keys (`Q1`) | `REQ1` | Fork policy 5 allows a `docs/` edit the change requires; the reference test requires it |
 
 ### Verification
 
@@ -113,10 +114,10 @@ Not applicable — no UI.
 
 ### Status
 
-- **State:** `Ready`
-- **Position:** `Not started`
-- **Work branch:** `Pending`
-- **Base commit:** `Pending`
+- **State:** `In Progress`
+- **Position:** `G1`
+- **Work branch:** `feat/bold-color`
+- **Base commit:** `7c59eab9`
 
 ### Sources
 
