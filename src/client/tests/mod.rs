@@ -780,6 +780,7 @@ fn reload_local_client_config_refreshes_local_client_presentation_state() {
     let mut sound_config = crate::config::SoundConfig::default();
     let mut redraw_on_focus_gained = true;
     let mut draw_host_cursor = false;
+    let mut bold_color = None;
     let mut remote_image_paste_key = None;
     let mut mouse_capture = true;
 
@@ -787,6 +788,7 @@ fn reload_local_client_config_refreshes_local_client_presentation_state() {
         &mut sound_config,
         &mut redraw_on_focus_gained,
         &mut draw_host_cursor,
+        &mut bold_color,
         &mut remote_image_paste_key,
         &mut mouse_capture,
     );
@@ -814,6 +816,7 @@ fn reload_local_client_config_keeps_ui_preferences_when_ui_is_invalid() {
     let mut sound_config = crate::config::SoundConfig::default();
     let mut redraw_on_focus_gained = false;
     let mut draw_host_cursor = true;
+    let mut bold_color = None;
     let mut remote_image_paste_key = None;
     let mut mouse_capture = false;
 
@@ -821,6 +824,7 @@ fn reload_local_client_config_keeps_ui_preferences_when_ui_is_invalid() {
         &mut sound_config,
         &mut redraw_on_focus_gained,
         &mut draw_host_cursor,
+        &mut bold_color,
         &mut remote_image_paste_key,
         &mut mouse_capture,
     );
