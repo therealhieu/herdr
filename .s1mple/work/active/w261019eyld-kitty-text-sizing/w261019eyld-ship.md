@@ -67,7 +67,7 @@ The user asked for a self-driven ship with execution, so no questions were asked
 | `REQ4` | Sized blocks stay aligned with no leftover or shifted cells through scrolling, pane resize, tab/pane/workspace switches, popups, and redraws; a block that cannot be drawn whole shows unscaled text in its top row and blanks elsewhere. | prompt, `A8`, `A9` |
 | `REQ5` | Writing over or erasing any cell of a block (print, ECH, EL, ED, DCH, ICH, IL, DL) removes its scaled rendering; its remaining cells render with the `REQ4`/`A8` fallback (unscaled text in surviving top-row cells while the top-left cell survives, blanks elsewhere). Lower-row displacement is not emulated. | prompt, `A4`, `A8` |
 | `REQ6` | `herdr agent read`, visible text, and copied selections show the block text instead of marker characters; session persistence restores blocks. | `A11` |
-| `REQ7` | No new work runs in the server render loop, and PTY parsing and client presentation stay within the existing scaling behavior at 1 and 15+ panes. | `A13`, `AGENTS.md` Multiplicative performance paths |
+| `REQ7` | No new work runs in pane rendering (`PaneTerminal::render`, dirty-patch collection). Per-frame presentation (client presenter, direct-terminal fallback) adds at most one allocation-free symbol-prefix scan per presented frame per client when no sized text exists, and the PTY tracker adds no work while sizing is off; these costs are profiled at 1 and 15+ panes and stay within the existing scaling behavior. | `A13`, `AGENTS.md` Multiplicative performance paths |
 
 ### UI Mockups
 
@@ -318,6 +318,7 @@ harden → Deliver
 
 - **Planned deviation:** kitty lower-row displacement is not emulated (`A4`).
 - **REQ5 clarification (G2-VER2):** `REQ5` said remaining cells "render blank" while `A8`/`REQ4`/`V4` specify top-row text fallback. The client cannot tell an overwrite from a popup covering the same cells, and kitty itself keeps a block visible after a lower-row write, so one fallback rule for every non-drawable block is kept (`A8`). `REQ5` wording aligned with `A8`; no behavior change. Resolved by the orchestrator in the ship file.
+- **REQ7 clarification (OVR-VER3):** `REQ7` said "no new work in the server render loop", but the direct-terminal fanout (`src/server/render_stream.rs` `prepare_frame`) and the client presenter scan every cell once per presented frame, as `DES3`/`DES7` designed. `REQ7` wording now names pane rendering as untouched and bounds the per-frame presentation cost; the missing profile of the new paths is added by the `OVR-VER3` remediation.
 
 ### Completion Summary
 
