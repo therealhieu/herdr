@@ -65,7 +65,7 @@ The user asked for a self-driven ship with execution, so no questions were asked
 | `REQ2` | With sizing available, cursor movement and CPR after OSC 66 match kitty: probe `w=2` and `s=2` each advance 2 columns, OpenTUI `w=1` advances 1; blocks wrap or back up, scroll to fit their height, and are discarded when larger than the screen; empty text is a no-op. | prompt, `A3`, `A10` |
 | `REQ3` | When no attached client can size text, or the switch is off, OSC 66 is dropped as today: nothing is drawn and the cursor does not move. | prompt, `A5`, `A6`, `A12` |
 | `REQ4` | Sized blocks stay aligned with no leftover or shifted cells through scrolling, pane resize, tab/pane/workspace switches, popups, and redraws; a block that cannot be drawn whole shows unscaled text in its top row and blanks elsewhere. | prompt, `A8`, `A9` |
-| `REQ5` | Writing over or erasing any cell of a block (print, ECH, EL, ED, DCH, ICH, IL, DL) removes the whole block; its remaining cells render blank. Lower-row displacement is not emulated. | prompt, `A4` |
+| `REQ5` | Writing over or erasing any cell of a block (print, ECH, EL, ED, DCH, ICH, IL, DL) removes its scaled rendering; its remaining cells render with the `REQ4`/`A8` fallback (unscaled text in surviving top-row cells while the top-left cell survives, blanks elsewhere). Lower-row displacement is not emulated. | prompt, `A4`, `A8` |
 | `REQ6` | `herdr agent read`, visible text, and copied selections show the block text instead of marker characters; session persistence restores blocks. | `A11` |
 | `REQ7` | No new work runs in the server render loop, and PTY parsing and client presentation stay within the existing scaling behavior at 1 and 15+ panes. | `A13`, `AGENTS.md` Multiplicative performance paths |
 
@@ -316,7 +316,8 @@ harden → Deliver
 
 ### Blockers, Deviations, and Replacements
 
-`Pending` — replace with `None` or entries giving location, evidence, impact, and resolution. Known planned deviation: kitty lower-row displacement is not emulated (`A4`).
+- **Planned deviation:** kitty lower-row displacement is not emulated (`A4`).
+- **REQ5 clarification (G2-VER2):** `REQ5` said remaining cells "render blank" while `A8`/`REQ4`/`V4` specify top-row text fallback. The client cannot tell an overwrite from a popup covering the same cells, and kitty itself keeps a block visible after a lower-row write, so one fallback rule for every non-drawable block is kept (`A8`). `REQ5` wording aligned with `A8`; no behavior change. Resolved by the orchestrator in the ship file.
 
 ### Completion Summary
 
