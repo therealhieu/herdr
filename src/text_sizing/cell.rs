@@ -16,8 +16,6 @@ const MARK_VALUES: u32 = 240;
 pub(crate) const MAX_MARKS: usize = 64;
 const POSITION_MARKS: usize = 4;
 const HEADER_MARKS: usize = 8;
-/// Marks left for the block text in the top-left cell.
-pub(crate) const MAX_TEXT_MARKS: usize = MAX_MARKS - HEADER_MARKS;
 /// Kitty's limit on codepoints stored in one multicell block.
 pub(crate) const MAX_TEXT_CODEPOINTS: usize = 24;
 const TEXT_DIGIT_BASE: u32 = 120;
@@ -67,6 +65,11 @@ pub(crate) struct Placeholder {
     pub meta: Option<BlockMeta>,
 }
 
+/// Returns whether `ch` is a placeholder mark.
+pub(crate) fn is_mark(ch: char) -> bool {
+    (MARK_FIRST..MARK_FIRST + MARK_VALUES).contains(&u32::from(ch))
+}
+
 /// Returns whether `grapheme` starts with the placeholder base.
 pub(crate) fn is_placeholder(grapheme: &str) -> bool {
     grapheme.starts_with(BASE)
@@ -111,13 +114,12 @@ pub(crate) fn encode_cell(row: u8, col: u8, nonce: u16, meta: Option<&BlockMeta>
 
 /// Decodes a placeholder grapheme, or returns `None` when it is malformed.
 pub(crate) fn decode(grapheme: &str) -> Option<Placeholder> {
-    let mut chars = grapheme.chars();
-    if chars.next()? != BASE {
+    if !is_placeholder(grapheme) {
         return None;
     }
     let mut marks = [0u8; MAX_MARKS];
     let mut len = 0;
-    for ch in chars {
+    for ch in grapheme.chars().skip(1) {
         let value = u32::from(ch).checked_sub(MARK_FIRST)?;
         if value >= MARK_VALUES || len == MAX_MARKS {
             return None;
