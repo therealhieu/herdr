@@ -210,6 +210,8 @@ pub(crate) struct GhosttyPaneCore {
     pub transient_default_color_owner_pgid: Option<u32>,
     pub default_color_tracker: DefaultColorOscTracker,
     pub default_color_event_tracker: DefaultColorEventTracker,
+    text_sizing_tracker: crate::text_sizing::tracker::TextSizingTracker,
+    text_sizing_nonce: u16,
     c1_xtgettcap_tracker: C1XtgettcapQueryTracker,
     pub child_default_foreground_changed: bool,
     pub child_default_background_changed: bool,
@@ -1196,6 +1198,8 @@ impl GhosttyPaneTerminal {
                 transient_default_color_owner_pgid: None,
                 default_color_tracker: DefaultColorOscTracker::default(),
                 default_color_event_tracker: DefaultColorEventTracker::default(),
+                text_sizing_tracker: Default::default(),
+                text_sizing_nonce: 0,
                 c1_xtgettcap_tracker: C1XtgettcapQueryTracker::default(),
                 child_default_foreground_changed: false,
                 child_default_background_changed: false,
@@ -1406,6 +1410,12 @@ impl GhosttyPaneTerminal {
         core.decscusr_tracker.observe(bytes);
         let in_progress_default_color_event = core.default_color_event_tracker.in_progress_event();
         let default_color_events = core.default_color_event_tracker.drain_pending();
+        let text_sizing_commands = if crate::text_sizing::is_active() {
+            core.text_sizing_tracker.observe(bytes);
+            core.text_sizing_tracker.drain_pending()
+        } else {
+            Vec::new()
+        };
         let synchronized_output_before = core
             .terminal
             .mode_get(crate::ghostty::MODE_SYNCHRONIZED_OUTPUT)
@@ -1417,6 +1427,7 @@ impl GhosttyPaneTerminal {
             default_color_events,
             in_progress_default_color_event,
             c1_xtgettcap_responses,
+            text_sizing_commands,
             &mut terminal_responses,
         );
         let terminal_bells = core.terminal.take_bell_count();
@@ -1495,6 +1506,7 @@ impl GhosttyPaneTerminal {
         default_color_events: Vec<DefaultColorTrackedEvent>,
         in_progress_default_color_event: Option<DefaultColorEvent>,
         c1_xtgettcap_responses: Vec<C1XtgettcapResponse>,
+        text_sizing_commands: Vec<crate::text_sizing::tracker::TextSizingCommand>,
         terminal_responses: &mut Vec<Bytes>,
     ) {
         // Only legacy C1 replies need merging; ordinary XTGETTCAP remains native.
@@ -1505,6 +1517,11 @@ impl GhosttyPaneTerminal {
                 c1_xtgettcap_responses
                     .into_iter()
                     .map(OrderedColorOrC1Event::C1),
+            )
+            .chain(
+                text_sizing_commands
+                    .into_iter()
+                    .map(OrderedColorOrC1Event::TextSizing),
             )
             .collect();
         events.sort_by_key(OrderedColorOrC1Event::end_offset);
@@ -1548,6 +1565,11 @@ impl GhosttyPaneTerminal {
                     if !response.suppress_native {
                         terminal_responses.push(response.bytes);
                     }
+                }
+                OrderedColorOrC1Event::TextSizing(command) => {
+                    terminal_responses.extend(libghostty_responses);
+                    let nonce = &mut core.text_sizing_nonce;
+                    crate::text_sizing::inject::apply(&mut core.terminal, &command, nonce);
                 }
             }
         }
@@ -3357,6 +3379,7 @@ fn ghostty_cell_style(
 enum OrderedColorOrC1Event {
     Color(DefaultColorTrackedEvent),
     C1(C1XtgettcapResponse),
+    TextSizing(crate::text_sizing::tracker::TextSizingCommand),
 }
 
 impl OrderedColorOrC1Event {
@@ -3364,6 +3387,7 @@ impl OrderedColorOrC1Event {
         match self {
             Self::Color(event) => event.end_offset,
             Self::C1(response) => response.end_offset,
+            Self::TextSizing(command) => command.end_offset,
         }
     }
 }
@@ -7620,5 +7644,204 @@ mod tests {
         let mut rows = vec!["hello".to_string(), "".to_string(), "   ".to_string()];
         trim_trailing_blank_rows(&mut rows);
         assert_eq!(rows, vec!["hello".to_string()]);
+    }
+
+    fn text_sizing_pane(cols: u16, rows: u16) -> (GhosttyPaneTerminal, mpsc::Sender<Bytes>) {
+        let (tx, _rx) = mpsc::channel(16);
+        let terminal = crate::ghostty::Terminal::new(cols, rows, 0).unwrap();
+        (GhosttyPaneTerminal::new(terminal, tx.clone()).unwrap(), tx)
+    }
+
+    /// Writes `bytes` followed by a cursor position report request and
+    /// returns the reported 1-based `(row, col)`.
+    fn text_sizing_write_and_report(
+        pane: &GhosttyPaneTerminal,
+        tx: &mpsc::Sender<Bytes>,
+        bytes: &[u8],
+    ) -> (u16, u16) {
+        let mut input = bytes.to_vec();
+        input.extend_from_slice(b"\x1b[6n");
+        let result = pane.process_pty_bytes(PaneId::from_raw(1), 0, &input, tx);
+        let report = result
+            .terminal_responses
+            .last()
+            .map(|reply| String::from_utf8_lossy(reply).into_owned())
+            .unwrap_or_default();
+        let body = report
+            .strip_prefix("\x1b[")
+            .and_then(|rest| rest.strip_suffix('R'))
+            .unwrap_or_else(|| panic!("unexpected report {report:?}"));
+        let (row, col) = body.split_once(';').unwrap();
+        (row.parse().unwrap(), col.parse().unwrap())
+    }
+
+    /// Decoded placeholder cells keyed by `(row, col)` on the active screen.
+    fn text_sizing_cells(
+        pane: &GhosttyPaneTerminal,
+    ) -> std::collections::BTreeMap<(usize, usize), crate::text_sizing::cell::Placeholder> {
+        let core = pane.core.lock().unwrap();
+        let rows = core.terminal.screen_text_rows().unwrap();
+        let mut cells = std::collections::BTreeMap::new();
+        for (y, row) in rows.iter().enumerate() {
+            for (x, cell) in row.cells.iter().enumerate() {
+                let grapheme: String = cell
+                    .graphemes
+                    .iter()
+                    .filter_map(|&cp| char::from_u32(cp))
+                    .collect();
+                if crate::text_sizing::cell::is_placeholder(&grapheme) {
+                    let decoded = crate::text_sizing::cell::decode(&grapheme)
+                        .unwrap_or_else(|| panic!("malformed placeholder at {x},{y}"));
+                    cells.insert((y, x), decoded);
+                }
+            }
+        }
+        cells
+    }
+
+    /// Top-left `(row, col, text)` of every block whose cells are all present.
+    fn text_sizing_intact_blocks(pane: &GhosttyPaneTerminal) -> Vec<(usize, usize, String)> {
+        let cells = text_sizing_cells(pane);
+        cells
+            .iter()
+            .filter_map(|(&(y, x), cell)| {
+                let meta = cell.meta.as_ref()?;
+                let intact = (0..usize::from(meta.rows())).all(|dr| {
+                    (0..usize::from(meta.columns())).all(|dc| {
+                        cells.get(&(y + dr, x + dc)).is_some_and(|other| {
+                            other.nonce == cell.nonce
+                                && usize::from(other.row) == dr
+                                && usize::from(other.col) == dc
+                        })
+                    })
+                });
+                intact.then(|| (y, x, meta.text.clone()))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn text_sizing_cursor_matches_kitty_probe() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        for (probe, expected_col) in [
+            (&b"\r\x1b]66;w=2; \x07"[..], 3),
+            (&b"\r\x1b]66;s=2; \x07"[..], 3),
+            (&b"\r\x1b]66;w=1; \x07"[..], 2),
+            (&b"\r\x1b]66;s=2;\x07"[..], 1),
+        ] {
+            let (pane, tx) = text_sizing_pane(20, 5);
+            assert_eq!(
+                text_sizing_write_and_report(&pane, &tx, probe),
+                (1, expected_col),
+                "probe {probe:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn text_sizing_inactive_leaves_cursor_unchanged() {
+        let _inactive = crate::text_sizing::set_active_for_test(false);
+        for probe in [&b"\r\x1b]66;w=2; \x07"[..], &b"\r\x1b]66;s=2;H\x07"[..]] {
+            let (pane, tx) = text_sizing_pane(20, 5);
+            assert_eq!(text_sizing_write_and_report(&pane, &tx, probe), (1, 1));
+            assert!(text_sizing_cells(&pane).is_empty());
+        }
+    }
+
+    #[test]
+    fn text_sizing_places_placeholder_cells_with_and_without_grapheme_clustering() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        for clustering in [true, false] {
+            let (pane, tx) = text_sizing_pane(10, 4);
+            pane.core
+                .lock()
+                .unwrap()
+                .terminal
+                .mode_set(crate::ghostty::MODE_GRAPHEME_CLUSTER, clustering)
+                .unwrap();
+            let report = text_sizing_write_and_report(&pane, &tx, b"ab\x1b]66;s=2:w=1;H\x07");
+            assert_eq!(report, (1, 5), "clustering {clustering}");
+            assert_eq!(
+                text_sizing_intact_blocks(&pane),
+                vec![(0, 2, "H".to_string())],
+                "clustering {clustering}"
+            );
+            let positions: Vec<_> = text_sizing_cells(&pane).into_keys().collect();
+            assert_eq!(positions, vec![(0, 2), (0, 3), (1, 2), (1, 3)]);
+        }
+    }
+
+    #[test]
+    fn text_sizing_block_on_last_row_scrolls_to_fit() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        let (pane, tx) = text_sizing_pane(10, 3);
+        let report = text_sizing_write_and_report(&pane, &tx, b"top\r\n\r\n\x1b]66;s=2;H\x07");
+        assert_eq!(report, (2, 3));
+        assert_eq!(
+            text_sizing_intact_blocks(&pane),
+            vec![(1, 0, "H".to_string())]
+        );
+    }
+
+    #[test]
+    fn text_sizing_discards_blocks_larger_than_the_screen() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        let (pane, tx) = text_sizing_pane(10, 3);
+        let report = text_sizing_write_and_report(&pane, &tx, b"ab\x1b]66;w=7:s=7;H\x07");
+        assert_eq!(report, (1, 3));
+        assert!(text_sizing_cells(&pane).is_empty());
+    }
+
+    #[test]
+    fn text_sizing_backs_up_when_autowrap_is_off() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        for clustering in [true, false] {
+            let (pane, tx) = text_sizing_pane(10, 3);
+            pane.core
+                .lock()
+                .unwrap()
+                .terminal
+                .mode_set(crate::ghostty::MODE_GRAPHEME_CLUSTER, clustering)
+                .unwrap();
+            let report =
+                text_sizing_write_and_report(&pane, &tx, b"\x1b[?7labcdefgh\x1b]66;w=3;H\x07");
+            assert_eq!(report, (1, 10), "clustering {clustering}");
+            assert_eq!(
+                text_sizing_intact_blocks(&pane),
+                vec![(0, 7, "H".to_string())],
+                "clustering {clustering}"
+            );
+            // Autowrap stays off: the next character overwrites the last column.
+            let report = text_sizing_write_and_report(&pane, &tx, b"Z");
+            assert_eq!(report, (1, 10), "clustering {clustering}");
+            assert!(text_sizing_intact_blocks(&pane).is_empty());
+        }
+    }
+
+    #[test]
+    fn text_sizing_wraps_when_the_block_does_not_fit() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        let (pane, tx) = text_sizing_pane(10, 3);
+        let report = text_sizing_write_and_report(&pane, &tx, b"abcdefghi\x1b]66;w=2;H\x07");
+        assert_eq!(report, (2, 3));
+        assert_eq!(
+            text_sizing_intact_blocks(&pane),
+            vec![(1, 0, "H".to_string())]
+        );
+    }
+
+    #[test]
+    fn text_sizing_overwriting_or_erasing_breaks_blocks() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        let (pane, tx) = text_sizing_pane(10, 4);
+        text_sizing_write_and_report(&pane, &tx, b"\x1b]66;s=2;H\x07");
+        assert_eq!(text_sizing_intact_blocks(&pane).len(), 1);
+        text_sizing_write_and_report(&pane, &tx, b"\x1b[2;2Hx");
+        assert!(text_sizing_intact_blocks(&pane).is_empty());
+
+        let (pane, tx) = text_sizing_pane(10, 4);
+        text_sizing_write_and_report(&pane, &tx, b"\x1b]66;s=2;H\x07");
+        text_sizing_write_and_report(&pane, &tx, b"\x1b[1;1H\x1b[1X");
+        assert!(text_sizing_intact_blocks(&pane).is_empty());
     }
 }

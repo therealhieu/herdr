@@ -9,6 +9,7 @@
 //! draw them; otherwise OSC 66 stays a no-op, as before.
 
 pub(crate) mod cell;
+pub(crate) mod inject;
 pub(crate) mod tracker;
 
 use std::sync::atomic::{AtomicBool, Ordering};
