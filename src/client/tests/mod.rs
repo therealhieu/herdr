@@ -772,7 +772,7 @@ fn reload_local_client_config_refreshes_local_client_presentation_state() {
     ));
     std::fs::write(
         &path,
-        "[ui]\nredraw_on_focus_gained = false\nhost_cursor = \"drawn\"\nmouse_capture = false\n",
+        "[ui]\nredraw_on_focus_gained = false\nhost_cursor = \"drawn\"\nbold_color = \"#f8dea6\"\nmouse_capture = false\n",
     )
     .unwrap();
     let path_string = path.to_string_lossy().to_string();
@@ -796,6 +796,10 @@ fn reload_local_client_config_refreshes_local_client_presentation_state() {
     assert!(!redraw_on_focus_gained);
     assert!(draw_host_cursor);
     assert!(!mouse_capture);
+    assert_eq!(
+        bold_color,
+        Some(crate::config::BoldColorConfig::Rgb(248, 222, 166))
+    );
     let _ = std::fs::remove_file(path);
 }
 
