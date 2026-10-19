@@ -57,8 +57,6 @@ impl Drop for ActiveOverrideGuard {
 }
 
 /// Records whether this client's host terminal can draw sized text.
-// Wired by client capability negotiation; unused until then.
-#[allow(dead_code)]
 pub(crate) fn set_host_supported(supported: bool) {
     HOST_SUPPORTED.store(supported, Ordering::Relaxed);
 }
@@ -80,8 +78,6 @@ pub(crate) struct RegistryState {
     active: bool,
 }
 
-// Exercised once client connections register; unused until then.
-#[allow(dead_code)]
 impl RegistryState {
     pub(crate) const fn new() -> Self {
         Self {
@@ -119,14 +115,10 @@ impl RegistryState {
 }
 
 /// Registers one attached client for its connection lifetime.
-// Held by client connections once capability negotiation lands.
-#[allow(dead_code)]
 pub(crate) struct ClientRegistration {
     supporting: bool,
 }
 
-// Constructed by client connections once capability negotiation lands.
-#[allow(dead_code)]
 impl ClientRegistration {
     pub(crate) fn new(supporting: bool) -> Self {
         update_registry(|registry| registry.register(supporting));
@@ -145,4 +137,38 @@ fn update_registry(change: impl FnOnce(&mut RegistryState)) {
     let mut registry = REGISTRY.lock().unwrap_or_else(PoisonError::into_inner);
     change(&mut registry);
     ACTIVE.store(registry.active(), Ordering::Relaxed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RegistryState;
+
+    #[test]
+    fn registry_follows_attached_clients_and_keeps_value_when_all_detach() {
+        let mut registry = RegistryState::new();
+        assert!(!registry.active(), "off at server start");
+
+        registry.register(true);
+        assert!(registry.active(), "on with one supporting client");
+
+        registry.register(false);
+        assert!(
+            registry.active(),
+            "still on while a supporting client remains"
+        );
+
+        registry.unregister(true);
+        assert!(
+            !registry.active(),
+            "off when only unsupported clients remain"
+        );
+
+        registry.register(true);
+        registry.unregister(false);
+        registry.unregister(true);
+        assert!(registry.active(), "unchanged when the last client detaches");
+
+        registry.register(false);
+        assert!(!registry.active(), "an unsupported reattach turns it off");
+    }
 }
