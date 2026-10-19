@@ -1,6 +1,6 @@
 # herdr (therealhieu fork)
 
-- **Last Modified:** 2026-10-19 09:45 +07
+- **Last Modified:** 2026-10-19 12:11 +07
 
 Use this as the reusable baseline for discussion and plan inspection. Keep change-specific details in work documents. Cite important claims, distinguish rules from observations, and link authoritative sources instead of duplicating them. Repository-root paths are written as `path`; document links are relative to this file.
 
