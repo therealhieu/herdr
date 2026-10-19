@@ -294,8 +294,8 @@ harden → Deliver
 | `V5` | `Pending` |
 | `V6` | `Pending` |
 | `V7` | `Pending` |
-| `V8` | `Pending` |
-| `V9` | `Pending` |
+| `V8` | `Passed` (2026-10-19, kitty 0.49.2, debug build at `4fa2aaa7`, isolated `herdr-dev` sessions `osc66-test`/`osc66-off` with scratch `HERDR_CONFIG_PATH`; kitty screen state read with `kitty @ get-text --ansi`, because `screencapture` only returned the desktop). Probe with sizing: `plain 'a'` col 2, `w=2` col 3, `s=2` col 3 (plain kitty: 2/3/3; before: 2/1/1). Probe with `terminal.text_sizing = false`: 2/1/1. `so` `tour.md`: kitty multicells inside herdr equal plain kitty's after the pane offset (+1 row, +26 cols): H1 `s=2;█ Markdown tour` at (7,6), H2 `w=3:s=2:n=3:d=4:v=2;▊ Lists and task` at (15,6) and (15,48), (25,6), (25,52); `E = mc` followed by `w=1:n=1:d=2;2`; subscripts `v=1`. Scrolling to the end, tab switch (no sized cells on the other tab; identical screen text after returning), pane split down (blocks moved, old ones erased), and the settings popup (covered blocks removed, uncovered kept; identical screen text after closing) left no leftover or shifted cells. Not exercised live: herdr scrollback viewport scrolling and host window resize (covered by `V4` presenter cases). |
+| `V9` | `Passed with a pre-existing failure` — `just bench-render-scale` on base `41461ad7` (detached worktree, shared target dir) and head `4fa2aaa7`. Both runs: 6 profiles pass; `native_file_render_scale_profile` panics in both ("source profile requires working CoW retention"), so it is pre-existing and environment-related, not caused by this work. Scaling is unchanged: background-workspace combined pipeline median 607→614 µs (1 pane) and 619→618 µs (15 panes); active-pane combined pipeline 605→616 µs (1) and 673→668 µs (15); 15-pane vs 1× ratios 1.02→1.01 and 1.11→1.08. One head p95 outlier at 50 active panes (807 vs 576 µs, median 569 vs 540 µs) is in the server surface stage, which this work does not change; treated as run-to-run noise. |
 | `V10` | `Pending` |
 
 ### Overall Verification
