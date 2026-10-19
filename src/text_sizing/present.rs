@@ -50,15 +50,19 @@ pub(crate) struct Pass {
 impl Presenter {
     /// Marks intact blocks as `skip` cells when the host can size text and
     /// replaces every other placeholder cell with fallback text.
+    ///
+    /// Without host blocks or placeholder cells this is one scan of cell
+    /// symbol prefixes and allocates nothing: `Vec::new` reserves no memory.
     pub(crate) fn prepare(&self, frame: &mut FrameData, host_supported: bool) -> Pass {
         let mut pass = Pass {
             blocks: Vec::new(),
             width: frame.width,
             height: frame.height,
         };
-        if !self.host_blocks.is_empty() || has_placeholder(frame) {
-            present_blocks(frame, host_supported.then_some(&mut pass.blocks));
+        if self.host_blocks.is_empty() && !has_placeholder(frame) {
+            return pass;
         }
+        present_blocks(frame, host_supported.then_some(&mut pass.blocks));
         pass
     }
 
@@ -129,7 +133,8 @@ impl Presenter {
 }
 
 /// Replaces every placeholder cell with fallback text, for outputs that never
-/// draw sized text.
+/// draw sized text. Without placeholder cells this only scans symbol
+/// prefixes and allocates nothing.
 pub(crate) fn apply_fallback(frame: &mut FrameData) {
     if has_placeholder(frame) {
         present_blocks(frame, None);
@@ -527,5 +532,119 @@ mod tests {
         assert_eq!(symbol(&frame, 1, 1), "H");
         assert_eq!(symbol(&frame, 2, 1), " ");
         assert_eq!(symbol(&frame, 1, 2), " ");
+    }
+
+    #[test]
+    fn frames_without_placeholders_take_the_allocation_free_path() {
+        let mut presenter = Presenter::default();
+        let mut frame = blank_frame(6, 4);
+        cell_mut(&mut frame, 2, 1).symbol = "界".to_string();
+        let original = frame.clone();
+
+        let pass = presenter.prepare(&mut frame, true);
+        let (pre, post) = presenter.finish(&pass, true);
+        assert_eq!(pass.blocks.capacity(), 0);
+        assert_eq!((pre.capacity(), post.capacity()), (0, 0));
+        let mut bytes = b"frame".to_vec();
+        presenter.write_into(&pass, true, &mut bytes);
+        assert_eq!(bytes, b"frame");
+        presenter.commit(pass);
+        assert!(!presenter.has_host_blocks());
+
+        apply_fallback(&mut frame);
+        assert_eq!(frame, original);
+    }
+
+    /// A fixed 146x32 frame composed from one pane, or from a 5x3 grid of
+    /// pane regions separated by borders.
+    fn composed_frame(panes: usize) -> FrameData {
+        let (width, height) = (146u16, 32u16);
+        let mut frame = blank_frame(width, height);
+        let line: Vec<String> = "fn render(frame: &mut Frame) -> 界面 { draw(); } // ok "
+            .graphemes(true)
+            .map(str::to_string)
+            .collect();
+        for y in 0..height {
+            for x in 0..width {
+                let border = panes > 1 && (x % 29 == 28 || y % 11 == 10);
+                let symbol = if border {
+                    if y % 11 == 10 { "─" } else { "│" }.to_string()
+                } else {
+                    line[(usize::from(x) + usize::from(y) * 7) % line.len()].clone()
+                };
+                let cell = cell_mut(&mut frame, x, y);
+                cell.symbol = symbol;
+                cell.fg = u32::from(x % 8);
+            }
+        }
+        frame
+    }
+
+    fn percentiles(mut samples: Vec<u128>) -> (u128, u128) {
+        samples.sort_unstable();
+        (
+            samples[samples.len() / 2],
+            samples[samples.len() * 95 / 100],
+        )
+    }
+
+    #[test]
+    #[ignore = "non-gating release render scaling profile"]
+    fn text_sizing_present_render_scale_profile() {
+        const SAMPLES: usize = 400;
+        for panes in [1, 15] {
+            let plain = composed_frame(panes);
+            let mut sized = plain.clone();
+            for (x, y, block) in [
+                (2, 1, meta(2, 2, "Hi")),
+                (40, 4, meta(3, 1, "X")),
+                (90, 20, meta(2, 1, "界")),
+            ] {
+                place(&mut sized, x, y, 1 + x, &block);
+            }
+            let cells = plain.cells.len();
+
+            for (label, template) in [("none", &plain), ("intact_blocks", &sized)] {
+                let fast_path = label == "none";
+                let mut presenter = Presenter::default();
+                // Settle the host state so every sample is a steady-state frame.
+                let pass = presenter.prepare(&mut template.clone(), true);
+                presenter.commit(pass);
+                let mut samples = Vec::with_capacity(SAMPLES);
+                for _ in 0..SAMPLES + 20 {
+                    let mut frame = template.clone();
+                    let started = std::time::Instant::now();
+                    let pass = presenter.prepare(&mut frame, true);
+                    let bytes = presenter.finish(&pass, false);
+                    presenter.commit(pass);
+                    samples.push(started.elapsed().as_nanos());
+                    if fast_path {
+                        assert_eq!(frame, plain, "fast path must not touch the frame");
+                        assert_eq!((bytes.0.capacity(), bytes.1.capacity()), (0, 0));
+                    }
+                    std::hint::black_box((frame, bytes));
+                }
+                let (median, p95) = percentiles(samples.split_off(20));
+                eprintln!(
+                    "text_sizing presenter panes={panes} cells={cells} blocks={label} \
+                     median_ns={median} p95_ns={p95}"
+                );
+            }
+
+            let mut samples = Vec::with_capacity(SAMPLES);
+            for _ in 0..SAMPLES + 20 {
+                let mut frame = plain.clone();
+                let started = std::time::Instant::now();
+                apply_fallback(&mut frame);
+                samples.push(started.elapsed().as_nanos());
+                assert_eq!(frame, plain, "fast path must not touch the frame");
+                std::hint::black_box(frame);
+            }
+            let (median, p95) = percentiles(samples.split_off(20));
+            eprintln!(
+                "text_sizing apply_fallback panes={panes} cells={cells} placeholders=none \
+                 median_ns={median} p95_ns={p95}"
+            );
+        }
     }
 }

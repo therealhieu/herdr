@@ -350,4 +350,83 @@ mod tests {
             vec![command(13, TextSizingParams::default(), "ok")]
         );
     }
+
+    /// Colored build output with cursor moves, titles, and hyperlinks; with
+    /// `sized`, every eighth line is an OSC 66 block.
+    fn typical_output(sized: bool) -> Vec<u8> {
+        let mut out = Vec::new();
+        for line in 0..2048 {
+            out.extend_from_slice(
+                format!(
+                    "\x1b[32m   Compiling\x1b[0m crate-{line} v0.1.0 (/src/crate-{line})\r\n\
+                     \x1b[1;33mwarning\x1b[0m: unused variable `x` at src/lib.rs:{line}:9\r\n\x1b[K"
+                )
+                .as_bytes(),
+            );
+            if line % 16 == 0 {
+                out.extend_from_slice(b"\x1b]0;cargo build\x07\x1b[2;1H");
+                out.extend_from_slice(b"\x1b]8;;https://example.com/\x1b\\link\x1b]8;;\x1b\\");
+            }
+            if sized && line % 8 == 0 {
+                out.extend_from_slice(b"\x1b]66;s=2;Title\x07\r\n");
+            }
+        }
+        out
+    }
+
+    /// Feeds `bytes` in PTY-sized chunks the way the pane read path does.
+    fn feed(tracker: &mut TextSizingTracker, bytes: &[u8]) -> usize {
+        let mut commands = 0;
+        for chunk in bytes.chunks(4096) {
+            commands += if crate::text_sizing::is_active() {
+                tracker.observe(chunk);
+                tracker.drain_pending().len()
+            } else {
+                tracker.reset();
+                0
+            };
+        }
+        commands
+    }
+
+    #[test]
+    #[ignore = "non-gating release render scaling profile"]
+    fn text_sizing_tracker_render_scale_profile() {
+        const SAMPLES: usize = 60;
+        for (label, active, sized) in [
+            ("inactive", false, false),
+            ("active_typical", true, false),
+            ("active_sized", true, true),
+        ] {
+            let _active = crate::text_sizing::set_active_for_test(active);
+            let bytes = typical_output(sized);
+            for panes in [1usize, 15] {
+                let mut trackers: Vec<_> =
+                    (0..panes).map(|_| TextSizingTracker::default()).collect();
+                let mut samples = Vec::with_capacity(SAMPLES);
+                for _ in 0..SAMPLES + 5 {
+                    let started = std::time::Instant::now();
+                    let commands: usize = trackers
+                        .iter_mut()
+                        .map(|tracker| feed(tracker, &bytes))
+                        .sum();
+                    samples.push(started.elapsed().as_nanos());
+                    let expected = if active && sized { 256 * panes } else { 0 };
+                    assert_eq!(commands, expected);
+                }
+                let mut samples = samples.split_off(5);
+                samples.sort_unstable();
+                let (median, p95) = (
+                    samples[samples.len() / 2],
+                    samples[samples.len() * 95 / 100],
+                );
+                let total = bytes.len() * panes;
+                let mib_per_s = total as f64 / (median as f64 / 1e9) / (1024.0 * 1024.0);
+                eprintln!(
+                    "text_sizing tracker panes={panes} mode={label} bytes={total} \
+                     median_ns={median} p95_ns={p95} median_mib_s={mib_per_s:.0}"
+                );
+            }
+        }
+    }
 }
