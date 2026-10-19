@@ -10,6 +10,9 @@
 
 pub(crate) mod cell;
 pub(crate) mod inject;
+// Wired into client and server frame output in the next change.
+#[allow(dead_code)]
+pub(crate) mod present;
 pub(crate) mod text;
 pub(crate) mod tracker;
 
