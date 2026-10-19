@@ -7846,6 +7846,50 @@ mod tests {
         assert!(text_sizing_intact_blocks(&pane).is_empty());
     }
 
+    #[tokio::test]
+    async fn text_sizing_blocks_survive_history_snapshot_and_restore() {
+        let _active = crate::text_sizing::set_active_for_test(true);
+        // 18 four-byte emoji fill the top-left cell to 62 of its 64 marks.
+        let long_text = "\u{1f600}".repeat(18);
+        let input = format!("ab\x1b]66;s=2;Hi\x07\x1b]66;w=2:n=1:d=2;{long_text}\x07");
+        let (source, _source_rx) = crate::pane::PaneRuntime::test_with_channel(20, 5);
+        source.test_process_pty_bytes(input.as_bytes());
+
+        let expected_blocks = vec![
+            (0, 2, "H".to_string()),
+            (0, 4, "i".to_string()),
+            (0, 6, long_text.clone()),
+        ];
+        let source_cells = text_sizing_cells(&source.terminal.ghostty);
+        assert_eq!(source_cells.len(), 10);
+        assert_eq!(
+            text_sizing_intact_blocks(&source.terminal.ghostty),
+            expected_blocks
+        );
+
+        // Persistence stores raw placeholders so a restore can rebuild blocks.
+        let history = source.snapshot_history().unwrap();
+        assert!(history.contains(crate::text_sizing::cell::BASE));
+        assert!(!history.contains(long_text.as_str()));
+
+        let (restored, _restored_rx) = crate::pane::PaneRuntime::test_with_channel(20, 5);
+        restored.terminal.ghostty.seed_history_ansi(&history);
+
+        assert_eq!(text_sizing_cells(&restored.terminal.ghostty), source_cells);
+        assert_eq!(
+            text_sizing_intact_blocks(&restored.terminal.ghostty),
+            expected_blocks
+        );
+        let decoded_line = format!("abHi{long_text}");
+        for text in [
+            restored.visible_text(),
+            restored.recent_unwrapped_text_snapshot(usize::MAX).text,
+        ] {
+            assert_eq!(text.lines().next(), Some(decoded_line.as_str()));
+            assert!(!text.contains(crate::text_sizing::cell::BASE));
+        }
+    }
+
     #[test]
     fn text_sizing_partial_command_does_not_survive_an_inactive_period() {
         let chunks: [&[u8]; 3] = [b"\r\x1b]66;s=2;Hel", b"lo\x07abc", b"def\x07"];
