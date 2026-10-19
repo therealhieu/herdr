@@ -3519,11 +3519,11 @@ impl PaneRuntime {
     }
 
     pub fn visible_text(&self) -> String {
-        self.terminal.visible_text()
+        crate::text_sizing::text::decode_text(self.terminal.visible_text())
     }
 
     pub fn visible_ansi(&self) -> String {
-        self.terminal.visible_ansi()
+        crate::text_sizing::text::decode_text(self.terminal.visible_ansi())
     }
 
     pub fn detection_text(&self) -> String {
@@ -3543,19 +3543,19 @@ impl PaneRuntime {
     }
 
     pub(crate) fn recent_text_snapshot(&self, lines: usize) -> TerminalReadSnapshot {
-        let result = self.terminal.recent_text_snapshot(lines);
+        let result = decode_snapshot_text(self.terminal.recent_text_snapshot(lines));
         self.compression.wake();
         result
     }
 
     pub(crate) fn recent_ansi_snapshot(&self, lines: usize) -> TerminalReadSnapshot {
-        let result = self.terminal.recent_ansi_snapshot(lines);
+        let result = decode_snapshot_text(self.terminal.recent_ansi_snapshot(lines));
         self.compression.wake();
         result
     }
 
     pub(crate) fn recent_unwrapped_text_snapshot(&self, lines: usize) -> TerminalReadSnapshot {
-        let result = self.terminal.recent_unwrapped_text_snapshot(lines);
+        let result = decode_snapshot_text(self.terminal.recent_unwrapped_text_snapshot(lines));
         self.compression.wake();
         result
     }
@@ -3567,7 +3567,7 @@ impl PaneRuntime {
     }
 
     pub(crate) fn recent_unwrapped_ansi_snapshot(&self, lines: usize) -> TerminalReadSnapshot {
-        let result = self.terminal.recent_unwrapped_ansi_snapshot(lines);
+        let result = decode_snapshot_text(self.terminal.recent_unwrapped_ansi_snapshot(lines));
         self.compression.wake();
         result
     }
@@ -3578,7 +3578,10 @@ impl PaneRuntime {
     }
 
     pub fn extract_selection(&self, selection: &crate::selection::Selection) -> Option<String> {
-        let result = self.terminal.extract_selection(selection);
+        let result = self
+            .terminal
+            .extract_selection(selection)
+            .map(crate::text_sizing::text::decode_text);
         self.compression.wake();
         result
     }
@@ -3885,6 +3888,11 @@ impl PaneRuntime {
             None
         }
     }
+}
+
+fn decode_snapshot_text(mut snapshot: TerminalReadSnapshot) -> TerminalReadSnapshot {
+    snapshot.text = crate::text_sizing::text::decode_text(snapshot.text);
+    snapshot
 }
 
 #[cfg(test)]

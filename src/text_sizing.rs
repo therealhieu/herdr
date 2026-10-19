@@ -10,6 +10,7 @@
 
 pub(crate) mod cell;
 pub(crate) mod inject;
+pub(crate) mod text;
 pub(crate) mod tracker;
 
 use std::sync::atomic::{AtomicBool, Ordering};
