@@ -135,7 +135,7 @@ cell (1,1):     U+10EEED, M1, M1, M19, M100
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `G2`
+- **Position:** `G3`
 - **Work branch:** `feat/kitty-text-sizing`
 - **Base commit:** `41461ad7`
 
@@ -280,7 +280,7 @@ harden → Deliver
 | Group | Directory | Task commits | Verification report → status, SHA | Findings → fix SHAs | Merge SHA | Result |
 |---|---|---|---|---|---|---|
 | `G1` | main tree | T1 `f109a14b`, `6f3326a5`; T2 `b1dda237`; T3 `25d89a28`; T4 `7d0e37e5` | `reports/g1-verification-report.md` — `Failed` (1 Minor), `80958df5` | `G1-VER1` → `54d3804d` (tracker reset while inactive; `just test` 3939 passed) | Not applicable — main tree | `Accepted` |
-| `G2` | `Pending` | `Pending` | `reports/g2-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
+| `G2` | main tree | T1 `f10f75e0`; T2 `de1ef1da` | `reports/g2-verification-report.md` — `Failed` (1 Critical, 2 Minor), `09662073` | `G2-VER1` → `75463502` (control characters rejected in decode, encode, and OSC 66 writer); `G2-VER2` → ship-file clarification `24a0cf48`; `G2-VER3` → `2292263f` (direct-terminal fallback test); `just test` 3949 passed | Not applicable — main tree | `Accepted` |
 | `G3` | `Pending` | `Pending` | `reports/g3-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
 
 ### Verification Cases
