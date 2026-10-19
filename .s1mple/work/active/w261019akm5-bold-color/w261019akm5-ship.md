@@ -115,7 +115,7 @@ Not applicable — no UI.
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `G1`
+- **Position:** `Overall verification`
 - **Work branch:** `feat/bold-color`
 - **Base commit:** `7c59eab9`
 
@@ -238,17 +238,17 @@ harden → Deliver
 
 | Group | Directory | Task commits | Verification report → status, SHA | Findings → fix SHAs | Merge SHA | Result |
 |---|---|---|---|---|---|---|
-| `G1` | `Pending` | `Pending` | `reports/g1-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
+| `G1` | main tree | `6842bd84` T1, `e8fffcf7` T2, `adb6237c` T3, `4268444c` `1bc58df1` `3ee5f750` T4 | `reports/g1-verification-report.md` — `Passed`, `4c5da113` | None | Not applicable — main tree | `Accepted` |
 
 ### Verification Cases
 
 | Case | Actual result |
 |---|---|
-| `V1` | `Pending` |
-| `V2` | `Pending` |
-| `V3` | `Pending` |
+| `V1` | Passed — `just test-one bold_color`, rule table tests green (8/8 in filter) |
+| `V2` | Passed — config parse tests green (`#f8dea6`, `bright`, missing, invalid) |
+| `V3` | Passed — frame recolor, unset byte-identical baseline, surface patch |
 | `V4` | `Pending` |
-| `V5` | `Pending` |
+| `V5` | Passed — `just lint && just test`: nextest 3917 passed / 14 skipped; Python 150 + 6 OK; Bun 0 failures |
 
 ### Overall Verification
 
