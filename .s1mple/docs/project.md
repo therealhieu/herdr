@@ -1,6 +1,6 @@
 # herdr (therealhieu fork)
 
-- **Last Modified:** 2026-10-19 09:45 +07
+- **Last Modified:** 2026-10-19 12:11 +07
 
 Use this as the reusable baseline for discussion and plan inspection. Keep change-specific details in work documents. Cite important claims, distinguish rules from observations, and link authoritative sources instead of duplicating them. Repository-root paths are written as `path`; document links are relative to this file.
 
@@ -36,6 +36,7 @@ The goal is a custom version that can still absorb upstream releases cheaply.
 |---|---|---|---|
 | s1mple workspace | `.s1mple/` | None (fork-only directory) | Agent guidance for this fork |
 | macOS-only CI | `.github/workflows/fork-ci.yml` (new file); upstream workflows disabled in repo settings | None for the file; on sync, re-align its action pins, Rust, Zig, and Bun versions with upstream `ci.yml` | Mirrors upstream `ci.yml` macOS job |
+| Client `[ui] bold_color` (Ghostty `bold-color`: `"bright"` or `"#rrggbb"`) | New: `src/config/bold_color.rs`, `src/client/bold_color.rs`. Edited: `src/config.rs` (module + re-export), `src/config/model.rs` (`UiConfig` field + default), `src/client/state.rs` (field + two `bold_color::apply` calls), `src/client/mod.rs`, `src/client/loop_config.rs`, `src/client/config_reload.rs`, `src/client/tests/mod.rs` (reload argument), `docs/next/website/src/data/config-reference.json` (one `ui.bold_color` entry, required by `scripts/test_config_reference_check.py` in `just test`) | Low: one-line additions in upstream structs and the reload signature, plus one JSON object after `ui.redraw_on_focus_gained`; conflicts only if upstream edits those lines | Client-only recolor before `BlitEncoder`; no wire changes. The reference `values` are `bright`/`rgb` because the checker derives them from the enum variants |
 
 ## Technology Stack
 

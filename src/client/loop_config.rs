@@ -5,6 +5,7 @@ pub(super) struct ClientLoopConfig {
     pub(super) mouse_scroll_lines: usize,
     pub(super) redraw_on_focus_gained: bool,
     pub(super) host_cursor: crate::config::HostCursorModeConfig,
+    pub(super) bold_color: Option<crate::config::BoldColorConfig>,
     pub(super) kitty_graphics_enabled: bool,
     pub(super) pixel_geometry_enabled: bool,
     pub(super) pixel_geometry_fallback: bool,

@@ -941,6 +941,16 @@
           "description": "Force a full host-terminal redraw when the outer terminal regains focus."
         },
         {
+          "key": "ui.bold_color",
+          "type": "enum",
+          "default": "unset",
+          "description": "Color for bold text in the TUI client, like Ghostty's bold-color. Set \"#rrggbb\" (the rgb form) to draw bold default-color text in that color and bold palette colors 0-7 as their bright variants, or \"bright\" for the palette change only. Unset by default.",
+          "values": [
+            "bright",
+            "rgb"
+          ]
+        },
+        {
           "key": "ui.mouse_scroll_lines",
           "type": "integer",
           "default": "3",
