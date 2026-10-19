@@ -136,6 +136,14 @@ impl TextSizingTracker {
         std::mem::take(&mut self.pending)
     }
 
+    /// Forgets any partly seen sequence and undrained commands, so bytes the
+    /// tracker did not observe can never complete a command.
+    pub(crate) fn reset(&mut self) {
+        self.state = State::Ground;
+        self.body.clear();
+        self.pending.clear();
+    }
+
     fn after_escape(&mut self, byte: u8) -> State {
         match byte {
             b']' => {
@@ -329,5 +337,17 @@ mod tests {
                 .remove(0);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].text, "abc");
+    }
+
+    #[test]
+    fn reset_forgets_a_partly_seen_command() {
+        let mut tracker = TextSizingTracker::default();
+        tracker.observe(b"\x1b]66;s=2;Hel");
+        tracker.reset();
+        tracker.observe(b"def\x07\x1b]66;;ok\x07");
+        assert_eq!(
+            tracker.drain_pending(),
+            vec![command(13, TextSizingParams::default(), "ok")]
+        );
     }
 }

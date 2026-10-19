@@ -1414,6 +1414,7 @@ impl GhosttyPaneTerminal {
             core.text_sizing_tracker.observe(bytes);
             core.text_sizing_tracker.drain_pending()
         } else {
+            core.text_sizing_tracker.reset();
             Vec::new()
         };
         let synchronized_output_before = core
@@ -7843,5 +7844,37 @@ mod tests {
         text_sizing_write_and_report(&pane, &tx, b"\x1b]66;s=2;H\x07");
         text_sizing_write_and_report(&pane, &tx, b"\x1b[1;1H\x1b[1X");
         assert!(text_sizing_intact_blocks(&pane).is_empty());
+    }
+
+    #[test]
+    fn text_sizing_partial_command_does_not_survive_an_inactive_period() {
+        let chunks: [&[u8]; 3] = [b"\r\x1b]66;s=2;Hel", b"lo\x07abc", b"def\x07"];
+        let feed = |pane: &GhosttyPaneTerminal, tx: &mpsc::Sender<Bytes>, chunk: &[u8]| {
+            pane.process_pty_bytes(PaneId::from_raw(1), 0, chunk, tx);
+        };
+
+        let (reference, reference_tx) = text_sizing_pane(20, 5);
+        let expected = {
+            let _inactive = crate::text_sizing::set_active_for_test(false);
+            feed(&reference, &reference_tx, chunks[0]);
+            feed(&reference, &reference_tx, chunks[1]);
+            text_sizing_write_and_report(&reference, &reference_tx, chunks[2])
+        };
+
+        let (pane, tx) = text_sizing_pane(20, 5);
+        {
+            let _active = crate::text_sizing::set_active_for_test(true);
+            feed(&pane, &tx, chunks[0]);
+        }
+        {
+            let _inactive = crate::text_sizing::set_active_for_test(false);
+            feed(&pane, &tx, chunks[1]);
+        }
+        let _active = crate::text_sizing::set_active_for_test(true);
+        assert_eq!(
+            text_sizing_write_and_report(&pane, &tx, chunks[2]),
+            expected
+        );
+        assert!(text_sizing_cells(&pane).is_empty());
     }
 }
