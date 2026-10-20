@@ -1641,6 +1641,39 @@ async fn subpane_hidden_member_is_not_a_visible_render_source() {
 }
 
 #[tokio::test]
+async fn subpane_hidden_member_status_change_requests_a_full_render() {
+    let mut server = test_headless_server();
+    let mut workspace = crate::workspace::Workspace::test_new("stack");
+    let hidden = workspace.tabs[0].root_pane;
+    workspace.test_add_subpane(hidden);
+    server.app.state.workspaces = vec![workspace];
+    server.app.state.active = Some(0);
+    server.app.state.ensure_test_terminals();
+    assert!(server.app.state.workspaces[0].tabs[0]
+        .subpanes
+        .is_hidden(hidden));
+
+    // The strip is drawn by the full render, not by the hidden member's PTY
+    // output, so a status change must ask for one.
+    assert!(
+        server.handle_internal_event_with_forwarding(AppEvent::StateChanged {
+            pane_id: hidden,
+            agent: Some(crate::detect::Agent::Claude),
+            state: crate::detect::AgentState::Blocked,
+            visible_blocker: true,
+            visible_working: false,
+            process_exited: false,
+            observed_at: Instant::now(),
+        })
+    );
+    let terminal_id = server.app.state.workspaces[0].terminal_id(hidden).unwrap();
+    assert_eq!(
+        server.app.state.terminals[terminal_id].state,
+        crate::detect::AgentState::Blocked
+    );
+}
+
+#[tokio::test]
 async fn retained_patches_only_reach_shells_viewing_the_dirty_tab() {
     let mut server = test_headless_server();
     let mut workspace = crate::workspace::Workspace::test_new("divergent-retained");
