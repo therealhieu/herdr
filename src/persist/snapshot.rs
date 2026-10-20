@@ -94,6 +94,18 @@ pub struct TabSnapshot {
     pub focused: Option<u32>,
     #[serde(default)]
     pub root_pane: Option<u32>,
+    /// Terminals sharing a layout slot. Older binaries ignore this field and
+    /// restore only the visible members.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subpanes: Vec<SubpaneStackSnapshot>,
+}
+
+/// One subpane stack: saved pane ids in member order and the index of the
+/// member shown in the layout.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubpaneStackSnapshot {
+    pub members: Vec<u32>,
+    pub active: usize,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -162,6 +174,7 @@ impl From<LegacyWorkspaceSnapshot> for WorkspaceSnapshot {
             zoomed: snap.zoomed,
             focused: snap.focused,
             root_pane: snap.root_pane,
+            subpanes: Vec::new(),
         };
 
         Self {
@@ -398,6 +411,18 @@ fn capture_tab(
         zoomed: tab.zoomed,
         focused: Some(tab.layout.focused().raw()),
         root_pane: Some(tab.root_pane.raw()),
+        subpanes: tab
+            .subpanes
+            .iter()
+            .map(|stack| SubpaneStackSnapshot {
+                members: stack.members().iter().map(|id| id.raw()).collect(),
+                active: stack
+                    .members()
+                    .iter()
+                    .position(|id| *id == stack.active_member())
+                    .unwrap_or_default(),
+            })
+            .collect(),
     }
 }
 
@@ -654,6 +679,26 @@ mod tests {
     }
 
     #[test]
+    fn session_fixtures_without_subpanes_parse_and_serialize_unchanged() {
+        for name in ["current-herdr", "current-herdr-dev", "legacy-pre-tabs-v2"] {
+            let snapshot = parse_snapshot(session_fixture(name)).unwrap();
+            assert!(
+                snapshot
+                    .workspaces
+                    .iter()
+                    .flat_map(|workspace| &workspace.tabs)
+                    .all(|tab| tab.subpanes.is_empty()),
+                "{name} has no subpane stacks"
+            );
+            let json = serde_json::to_string(&snapshot).unwrap();
+            assert!(
+                !json.contains("subpanes"),
+                "{name} must not gain a subpanes key when it has no stacks"
+            );
+        }
+    }
+
+    #[test]
     fn round_trip_empty_session() {
         let snap = SessionSnapshot {
             version: SNAPSHOT_VERSION,
@@ -744,6 +789,7 @@ mod tests {
                     zoomed: false,
                     focused: Some(0),
                     root_pane: Some(0),
+                    subpanes: Vec::new(),
                 }],
                 active_tab: 0,
             }],
@@ -1445,6 +1491,7 @@ mod tests {
                     zoomed: false,
                     focused: Some(0),
                     root_pane: Some(0),
+                    subpanes: Vec::new(),
                 }],
                 active_tab: 0,
             }],

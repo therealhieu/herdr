@@ -1263,6 +1263,9 @@ impl Workspace {
         assert!(!ws.close_pane(removed_pane));
         let _unused_raw_id = PaneId::alloc();
         let later_pane = ws.test_split(Direction::Horizontal);
+        // A hidden subpane member keeps layout ids distinct from tab panes.
+        ws.test_add_subpane(later_pane);
+        assert!(ws.tabs[0].activate_subpane(later_pane));
 
         let removed_tab = ws.test_add_tab(Some("removed"));
         let survivor_tab = ws.test_add_tab(None);
