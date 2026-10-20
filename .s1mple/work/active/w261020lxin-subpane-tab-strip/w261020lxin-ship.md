@@ -167,7 +167,7 @@ Aim for the fewest cases that catch the failures that matter. Test count is not 
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `Overall verification`
+- **Position:** `Harden`
 - **Work branch:** `feat/subpane-tab-strip`
 - **Base commit:** `11ab68e9` — the diff base for overall verification and harden
 
@@ -364,15 +364,15 @@ harden → Deliver
 | `V7` | Passed — round-trip, fixtures without `subpanes`, invalid-stack drop, and unix handoff fd adoption tests; no fixture or version change |
 | `V8` | Passed — create/list/focus tests, schema artifact current, method shapes v1 contract pass, no fixture diff, `PROTOCOL_VERSION` 22 |
 | `V9` | Passed — key resolution, wrap both ways, jump, plain-pane no-ops, strip click routing over split handles, no hits without top border, pane cycling skips hidden members |
-| `V10` | `Pending` |
-| `V11` | `Pending` |
-| `V12` | `Pending` |
+| `V10` | Passed — `just lint && just test` exit 0 (4001 passed after remediation) |
+| `V11` | Passed — `render_scale_profile` combined median µs, base vs head (two alternating runs each): active 1 pane 594/596 vs 652/585, active 15 panes 675/661 vs 731/682, background 1 pane 594/791 vs 599/707, background 15 panes 612/618 vs 614/606 — within run-to-run spread. `just bench-render-scale` exits 101 on both base and head because the unrelated `native_file_render_scale_profile` needs CoW retention |
+| `V12` | Passed (API) — debug server session `v12smoke`: create, list with `subpane`, focus each member, member exits shrink then dissolve the stack, restart restores the `[1,4,5]` stack with order and active member and running hidden shells. Visual strip check on a real terminal: not run by the agent (left to the user) |
 
 ### Overall Verification
 
-- **Report:** `.s1mple/work/active/w261020lxin-subpane-tab-strip/reports/overall-verification-report.md` — `Pending`
-- **Result and report SHA:** `Pending`
-- **Findings → fix SHAs:** `Pending`
+- **Report:** `.s1mple/work/active/w261020lxin-subpane-tab-strip/reports/overall-verification-report.md` — committed
+- **Result and report SHA:** `Failed`, `8df8ab64` — all checks `V1`–`V12` passed; 1 Major and 2 Minor findings
+- **Findings → fix SHAs:** `OVR-VER1` (hidden agent members not resumed after restart) → `5662ef2c`; `OVR-VER3` (`pane.split` on a hidden member failed) → `ffe5c7e4`; `OVR-VER2` (older clients cycle into hidden members) → no code change, documented as a known limitation: the current client needs hidden members in `ClientShellSnapshot.panes` for strip hit-testing, and this fork's only client is built from the same source
 
 ### Harden
 
@@ -396,6 +396,7 @@ harden → Deliver
 - Open for overall: hidden members with a pending agent resume plan resume only when activated (resume candidates come from layout leaves).
 - G4: handler in new `src/app/api/subpanes.rs`, client logic in new `src/client/shell/subpanes.rs`. `ClientShellPane.subpane` serializes as `null` when absent (no `skip_serializing_if`, required by the snapshot bincode round-trip test); older clients ignore it. `focus: false` on `pane.subpane.create` still shows the new member in its slot; it only skips moving focus. Keys are spelled `prefix+period`/`prefix+comma`.
 - G4: `prefix+tab` pane cycling now skips hidden members (`G4-VER1`). Older clients connected to this server still see hidden members in `snapshot.panes` and can cycle into them (activating them).
+- Overall: `pane.zoom` and `pane.resize` given a hidden member id pass it through unmapped (not raised as a finding; left as a known follow-up).
 - G1: commit `0f6ecbc0` body says `Task: G1-T3 — Include hidden subpanes in pane and agent lists`; the plan title is `Include hidden members in data lists` (history not rewritten).
 
 ### Completion Summary
