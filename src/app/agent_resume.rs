@@ -327,8 +327,9 @@ fn derived_pending_agent_resume_pane_infos(
     pane_gaps: bool,
     pane_outer_borders: bool,
 ) -> Vec<crate::layout::PaneInfo> {
-    crate::ui::apply_pane_chrome(
-        tab.layout.panes(terminal_area),
+    crate::ui::apply_tab_pane_chrome(
+        tab,
+        terminal_area,
         pane_borders,
         pane_gaps,
         pane_outer_borders,
@@ -953,6 +954,45 @@ mod tests {
         for (_, runtime) in app.terminal_runtimes.drain() {
             runtime.shutdown();
         }
+    }
+
+    #[tokio::test]
+    async fn pending_resume_geometry_borders_a_single_slot_stack_like_the_renderer() {
+        let mut state = crate::app::AppState::test_new();
+        state.pane_borders = crate::config::PaneBordersConfig::Auto;
+        let mut ws = crate::workspace::Workspace::test_new("stack");
+        let root = ws.tabs[0].root_pane;
+        ws.test_add_subpane(root);
+        let visible = ws.tabs[0].layout.focused();
+        let terminal_id = ws.tabs[0].terminal_id(visible).unwrap().clone();
+        state.workspaces = vec![ws];
+        state.active = Some(0);
+        let mut runtimes = crate::terminal::TerminalRuntimeRegistry::new();
+        runtimes.insert(
+            terminal_id,
+            crate::terminal::TerminalRuntime::test_with_scrollback_bytes(10, 4, 1024, b""),
+        );
+        let area = Rect::new(0, 0, 60, 20);
+
+        let pending = derived_pending_agent_resume_pane_infos(
+            &state.workspaces[0].tabs[0],
+            area,
+            state.pane_borders,
+            state.pane_gaps,
+            state.pane_outer_borders,
+        );
+        crate::ui::compute_view_without_resizing_panes(&mut state, &runtimes, area);
+
+        let pending = pending.iter().find(|info| info.id == visible).unwrap();
+        let rendered = state
+            .view
+            .pane_infos
+            .iter()
+            .find(|info| info.id == visible)
+            .unwrap();
+        assert_eq!(pending.borders, ratatui::widgets::Borders::ALL);
+        assert_eq!(pending.borders, rendered.borders);
+        assert_eq!(pending.inner_rect, rendered.inner_rect);
     }
 
     #[test]
