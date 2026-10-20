@@ -17,6 +17,7 @@ use crate::terminal::{TerminalId, TerminalRuntime, TerminalRuntimeRegistry, Term
 
 mod aggregate;
 mod git;
+pub(crate) mod stack;
 mod tab;
 
 use self::git::git_status_cache_key_for_space;
@@ -1182,6 +1183,7 @@ impl Workspace {
             root_pane: root_id,
             layout,
             panes,
+            subpanes: Default::default(),
             runtimes: HashMap::new(),
             zoomed: false,
             events,
@@ -1238,6 +1240,7 @@ impl Workspace {
             root_pane: root_id,
             layout,
             panes,
+            subpanes: Default::default(),
             runtimes: HashMap::new(),
             zoomed: false,
             events,

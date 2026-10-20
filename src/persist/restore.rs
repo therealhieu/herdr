@@ -795,6 +795,7 @@ fn restore_tab(
                 root_pane,
                 layout,
                 panes,
+                subpanes: Default::default(),
                 #[cfg(test)]
                 runtimes: HashMap::new(),
                 zoomed: snap.zoomed,

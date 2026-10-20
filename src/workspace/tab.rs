@@ -43,6 +43,8 @@ pub struct Tab {
     pub layout: TileLayout,
     /// Pane viewport state — always present, testable without PTYs.
     pub panes: HashMap<PaneId, PaneState>,
+    /// Slots holding several terminals; hidden members live only in `panes`.
+    pub subpanes: super::stack::SubpaneStacks,
     #[cfg(test)]
     pub runtimes: HashMap<PaneId, TerminalRuntime>,
     pub zoomed: bool,
@@ -185,6 +187,7 @@ impl Tab {
                 root_pane: root_id,
                 layout,
                 panes,
+                subpanes: Default::default(),
                 #[cfg(test)]
                 runtimes: HashMap::new(),
                 zoomed: false,
@@ -448,6 +451,7 @@ impl Tab {
             root_pane: pane_id,
             layout: TileLayout::from_saved(Node::Pane(pane_id), pane_id),
             panes,
+            subpanes: Default::default(),
             #[cfg(test)]
             runtimes: HashMap::new(),
             zoomed: false,
