@@ -826,11 +826,15 @@ impl App {
                     let tab_idx = self.state.workspaces[ws_idx].find_tab_index_for_pane(pane_id)?;
                     Some((ws_idx, tab_idx, pane_id))
                 });
+            // A hidden stack member is not a layout leaf; swap with the leaf
+            // its slot shows instead.
             let target = self
                 .parse_pane_id(target_raw)
                 .and_then(|(ws_idx, pane_id)| {
-                    let tab_idx = self.state.workspaces[ws_idx].find_tab_index_for_pane(pane_id)?;
-                    Some((ws_idx, tab_idx, pane_id))
+                    let ws = &self.state.workspaces[ws_idx];
+                    let tab_idx = ws.find_tab_index_for_pane(pane_id)?;
+                    let leaf = ws.tabs[tab_idx].subpanes.visible_leaf(pane_id);
+                    Some((ws_idx, tab_idx, leaf))
                 });
             let response_context = source
                 .map(|(ws_idx, tab_idx, _)| (ws_idx, tab_idx))
@@ -1089,7 +1093,11 @@ impl App {
                                 format!("target pane {raw} is not in tab {tab_id}"),
                             );
                         }
-                        pane_id
+                        // A hidden stack member is not a layout leaf; split
+                        // next to the leaf its slot shows instead.
+                        self.state.workspaces[target_ws_idx].tabs[target_tab_idx]
+                            .subpanes
+                            .visible_leaf(pane_id)
                     }
                     None => self.state.workspaces[target_ws_idx].tabs[target_tab_idx]
                         .layout
@@ -4686,5 +4694,76 @@ mod tests {
 
             assert_eq!(metadata_error_code(&response), "invalid_metadata_ttl");
         }
+    }
+
+    #[test]
+    fn subpane_move_onto_hidden_member_splits_next_to_visible_leaf() {
+        let mut app = app_with_linked_worktree();
+        let source_root = app.state.workspaces[0].tabs[0].root_pane;
+        let source = app.state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        let target_tab = app.state.workspaces[0].test_add_tab(Some("target"));
+        let hidden = app.state.workspaces[0].tabs[target_tab].root_pane;
+        let visible = app.state.workspaces[0].test_add_subpane(hidden);
+        seed_terminal_states(&mut app);
+        let source_public = app.public_pane_id(0, source).unwrap();
+        let target_tab_public = app.public_tab_id(0, target_tab).unwrap();
+        let hidden_public = app.public_pane_id(0, hidden).unwrap();
+
+        let response = app.handle_pane_move(
+            "req".into(),
+            PaneMoveParams {
+                pane_id: source_public,
+                destination: PaneMoveDestination::Tab {
+                    tab_id: target_tab_public,
+                    target_pane_id: Some(hidden_public),
+                    split: SplitDirection::Right,
+                    ratio: None,
+                },
+                focus: true,
+            },
+        );
+
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let ResponseResult::PaneMove { move_result } = success.result else {
+            panic!("expected pane move response");
+        };
+        assert!(move_result.changed);
+        let ws = &app.state.workspaces[0];
+        assert_eq!(ws.tabs.len(), 2);
+        assert_eq!(ws.tabs[0].layout.pane_ids(), vec![source_root]);
+        assert_eq!(ws.tabs[target_tab].layout.pane_ids(), vec![visible, source]);
+        assert!(ws.tabs[target_tab].subpanes.is_hidden(hidden));
+        app.state.assert_invariants_for_test();
+    }
+
+    #[test]
+    fn subpane_swap_with_hidden_member_swaps_its_visible_leaf() {
+        let (mut app, _) = app_with_test_workspace();
+        let hidden = app.state.workspaces[0].tabs[0].root_pane;
+        let visible = app.state.workspaces[0].test_add_subpane(hidden);
+        let other = app.state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        app.state.active = Some(0);
+        app.state.ensure_test_terminals();
+        let other_public = app.public_pane_id(0, other).unwrap();
+        let hidden_public = app.public_pane_id(0, hidden).unwrap();
+
+        let response = app.handle_pane_swap(
+            "req".into(),
+            PaneSwapParams {
+                source_pane_id: Some(other_public),
+                target_pane_id: Some(hidden_public),
+                ..Default::default()
+            },
+        );
+
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let ResponseResult::PaneSwap { swap } = success.result else {
+            panic!("expected pane swap response");
+        };
+        assert!(swap.changed);
+        let tab = &app.state.workspaces[0].tabs[0];
+        assert_eq!(tab.layout.pane_ids(), vec![other, visible]);
+        assert!(tab.subpanes.is_hidden(hidden));
+        app.state.assert_invariants_for_test();
     }
 }
