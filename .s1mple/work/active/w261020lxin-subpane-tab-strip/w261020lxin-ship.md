@@ -166,10 +166,10 @@ Aim for the fewest cases that catch the failures that matter. Test count is not 
 
 ### Status
 
-- **State:** `Ready`
-- **Position:** `Not started`
-- **Work branch:** `feat/subpane-tab-strip` (recorded at execution start)
-- **Base commit:** `Pending` (HEAD SHA at execution start)
+- **State:** `In Progress`
+- **Position:** `G2` and `G3` (parallel)
+- **Work branch:** `feat/subpane-tab-strip`
+- **Base commit:** `11ab68e9` — the diff base for overall verification and harden
 
 ### Sources
 
@@ -346,7 +346,7 @@ harden → Deliver
 
 | Group | Directory | Task commits | Verification report → status, SHA | Findings → fix SHAs | Merge SHA | Result |
 |---|---|---|---|---|---|---|
-| `G1` | `Pending` | `Pending` | `reports/g1-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
+| `G1` | main tree | `b83908f1` (T1), `b68875f3` (T2), `c50bd7c7` (T3) | `reports/g1-verification-report.md` — `Failed`, `982bbb24` | `G1-VER1` → `0f6ecbc0`, `G1-VER2` → `a5769ee0` | Not applicable (main tree) | Accepted — all checks pass after remediation (`just test` 3975 passed, `just lint` clean) |
 | `G2` | `Pending` | `Pending` | `reports/g2-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
 | `G3` | `Pending` | `Pending` | `reports/g3-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
 | `G4` | `Pending` | `Pending` | `reports/g4-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
@@ -355,10 +355,10 @@ harden → Deliver
 
 | Case | Actual result |
 |---|---|
-| `V1` | `Pending` |
-| `V2` | `Pending` |
-| `V3` | `Pending` |
-| `V4` | `Pending` |
+| `V1` | Passed — `just test-one stack` 21/21 |
+| `V2` | Passed — `just test-one replace_leaf` 2/2 |
+| `V3` | Passed — `just test-one subpane` 11/11 (incl. move/swap onto hidden member regressions) |
+| `V4` | Passed — focus activates; hidden idle agent reports Done until activated |
 | `V5` | `Pending` |
 | `V6` | `Pending` |
 | `V7` | `Pending` |
@@ -386,7 +386,11 @@ harden → Deliver
 
 ### Blockers, Deviations, and Replacements
 
-`Pending`
+- G1: `Tab`/`Workspace` stack methods live in `src/workspace/stack.rs` instead of `tab.rs` (smaller upstream diff). `src/app/terminal_targets.rs:141` was also switched to member-inclusive ids so hidden agents can be found by name.
+- G1: `pane_is_in_active_tab` treats hidden members as outside the active tab, so a hidden agent that finishes now notifies (toast/sound) even when its tab is active — consistent with `REQ3` because the user cannot see it.
+- G1: `pane.move`/`pane.swap` aimed at a hidden member resolve to the slot's visible leaf (`G1-VER1` fix).
+- G1: `layout.updated` is emitted by `pane.focus` activation and stack-member removal; activation through `AppState::focus_pane_in_workspace` alone (no API call) emits nothing — client actions go through `pane.focus`, checked again in G4.
+- G1: commit `0f6ecbc0` body says `Task: G1-T3 — Include hidden subpanes in pane and agent lists`; the plan title is `Include hidden members in data lists` (history not rewritten).
 
 ### Completion Summary
 
