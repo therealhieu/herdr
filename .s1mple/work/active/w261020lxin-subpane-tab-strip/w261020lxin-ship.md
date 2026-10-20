@@ -347,7 +347,7 @@ harden → Deliver
 | Group | Directory | Task commits | Verification report → status, SHA | Findings → fix SHAs | Merge SHA | Result |
 |---|---|---|---|---|---|---|
 | `G1` | main tree | `b83908f1` (T1), `b68875f3` (T2), `c50bd7c7` (T3) | `reports/g1-verification-report.md` — `Failed`, `982bbb24` | `G1-VER1` → `0f6ecbc0`, `G1-VER2` → `a5769ee0` | Not applicable (main tree) | Accepted — all checks pass after remediation (`just test` 3975 passed, `just lint` clean) |
-| `G2` | `Pending` | `Pending` | `reports/g2-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
+| `G2` | `.s1mple/.worktrees/w261020lxin-g2` | `827bea16` (T1) | `reports/g2-verification-report.md` — `Passed`, `eb8f8ddf` | None | `5495a30e` | Accepted — subpane 15/15, snapshot 88/88, restore 96/96, lint clean, nextest 3979 passed |
 | `G3` | `Pending` | `Pending` | `reports/g3-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
 | `G4` | `Pending` | `Pending` | `reports/g4-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
 
@@ -361,7 +361,7 @@ harden → Deliver
 | `V4` | Passed — focus activates; hidden idle agent reports Done until activated |
 | `V5` | `Pending` |
 | `V6` | `Pending` |
-| `V7` | `Pending` |
+| `V7` | Passed — round-trip, fixtures without `subpanes`, invalid-stack drop, and unix handoff fd adoption tests; no fixture or version change |
 | `V8` | `Pending` |
 | `V9` | `Pending` |
 | `V10` | `Pending` |
@@ -390,6 +390,7 @@ harden → Deliver
 - G1: `pane_is_in_active_tab` treats hidden members as outside the active tab, so a hidden agent that finishes now notifies (toast/sound) even when its tab is active — consistent with `REQ3` because the user cannot see it.
 - G1: `pane.move`/`pane.swap` aimed at a hidden member resolve to the slot's visible leaf (`G1-VER1` fix).
 - G1: `layout.updated` is emitted by `pane.focus` activation and stack-member removal; activation through `AppState::focus_pane_in_workspace` alone (no API call) emits nothing — client actions go through `pane.focus`, checked again in G4.
+- G2: `Workspace::test_adversarial_identity_state()` (test-only, `src/workspace.rs`) now includes a stack. The invalid-stack warning is checked by code reading only (no log capture).
 - G1: commit `0f6ecbc0` body says `Task: G1-T3 — Include hidden subpanes in pane and agent lists`; the plan title is `Include hidden members in data lists` (history not rewritten).
 
 ### Completion Summary
