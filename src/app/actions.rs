@@ -245,6 +245,11 @@ impl AppState {
             .get_mut(ws_idx)
             .and_then(|ws| ws.tabs.get_mut(tab_idx))
         {
+            if tab.activate_subpane(pane_id) {
+                if let Some(pane) = tab.panes.get_mut(&pane_id) {
+                    pane.seen = true;
+                }
+            }
             tab.layout.focus_pane(pane_id);
             self.previous_pane_focus = previous;
             self.mark_session_dirty();
@@ -381,7 +386,12 @@ impl AppState {
         }
         self.workspaces[ws_idx]
             .find_tab_index_for_pane(pane_id)
-            .is_some_and(|tab_idx| tab_idx == self.workspaces[ws_idx].active_tab)
+            .is_some_and(|tab_idx| {
+                tab_idx == self.workspaces[ws_idx].active_tab
+                    && !self.workspaces[ws_idx].tabs[tab_idx]
+                        .subpanes
+                        .is_hidden(pane_id)
+            })
     }
 
     pub fn switch_workspace(&mut self, idx: usize) {
@@ -463,7 +473,7 @@ impl AppState {
         };
 
         let mut changed = false;
-        for pane in tab.panes.values_mut() {
+        for pane in tab.visible_panes_mut() {
             if !pane.seen {
                 pane.seen = true;
                 changed = true;
@@ -938,7 +948,7 @@ impl AppState {
     pub(crate) fn close_pane_would_close_workspace(&self, ws_idx: usize, pane_id: PaneId) -> bool {
         self.workspaces.get(ws_idx).is_some_and(|ws| {
             ws.find_tab_index_for_pane(pane_id).is_some_and(|tab_idx| {
-                ws.tabs[tab_idx].layout.pane_count() <= 1 && ws.tabs.len() <= 1
+                ws.tabs[tab_idx].removing_pane_empties_tab(pane_id) && ws.tabs.len() <= 1
             })
         })
     }

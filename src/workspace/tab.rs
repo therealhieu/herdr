@@ -465,6 +465,12 @@ impl Tab {
         if !self.panes.contains_key(&pane_id) {
             return None;
         }
+        if let Some(pane_state) = self.take_subpane_member(pane_id) {
+            return Some(MovedPane {
+                pane_id,
+                pane_state,
+            });
+        }
 
         if self.layout.pane_count() > 1 {
             let next_root = self.promoted_root_if_needed(pane_id);
@@ -503,6 +509,9 @@ impl Tab {
     }
 
     fn detach_pane(&mut self, pane_id: PaneId) -> Option<DetachedPane> {
+        if let Some(pane) = self.take_subpane_member(pane_id) {
+            return Some((pane_id, pane.attached_terminal_id));
+        }
         if self.layout.pane_count() <= 1 {
             return None;
         }
