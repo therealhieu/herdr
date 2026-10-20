@@ -167,7 +167,7 @@ Aim for the fewest cases that catch the failures that matter. Test count is not 
 ### Status
 
 - **State:** `In Progress`
-- **Position:** `G4`
+- **Position:** `Overall verification`
 - **Work branch:** `feat/subpane-tab-strip`
 - **Base commit:** `11ab68e9` — the diff base for overall verification and harden
 
@@ -349,7 +349,7 @@ harden → Deliver
 | `G1` | main tree | `b83908f1` (T1), `b68875f3` (T2), `c50bd7c7` (T3) | `reports/g1-verification-report.md` — `Failed`, `982bbb24` | `G1-VER1` → `0f6ecbc0`, `G1-VER2` → `a5769ee0` | Not applicable (main tree) | Accepted — all checks pass after remediation (`just test` 3975 passed, `just lint` clean) |
 | `G2` | `.s1mple/.worktrees/w261020lxin-g2` | `827bea16` (T1) | `reports/g2-verification-report.md` — `Passed`, `eb8f8ddf` | None | `5495a30e` | Accepted — subpane 15/15, snapshot 88/88, restore 96/96, lint clean, nextest 3979 passed |
 | `G3` | `.s1mple/.worktrees/w261020lxin-g3` | `67d010f9` (T1), `59484467` (T2) | `reports/g3-verification-report.md` — `Failed`, `00ba69a2` | `G3-VER1` → `834ce947`; report unverified item (hidden member title change redraws strip) → `c721641b` | `a03f58c8` | Accepted — subpane 22/22, subpane_strip 7/7, lint clean, nextest 3987 passed; merged tree with G2: subpane 26/26 |
-| `G4` | `Pending` | `Pending` | `reports/g4-verification-report.md` — `Pending` | `Pending` | `Pending` | `Pending` |
+| `G4` | main tree | `8b223584`, `05c74e37` (T1), `af84f6a5` (T2), `0b7dde1b` (T3) | `reports/g4-verification-report.md` — `Failed`, `2f2ad2cd` | `G4-VER1` → `8b006609`, `G4-VER2` → `8bbbda9f` | Not applicable (main tree) | Accepted — subpane 34/34, lint clean, nextest 3999 passed |
 
 ### Verification Cases
 
@@ -362,8 +362,8 @@ harden → Deliver
 | `V5` | Passed — `just test-one subpane_strip` 7/7 |
 | `V6` | Passed — strip row, badge row, no-border, hidden sizing (tiled/zoomed), hidden not a render source, resume chrome, status/title redraw triggers |
 | `V7` | Passed — round-trip, fixtures without `subpanes`, invalid-stack drop, and unix handoff fd adoption tests; no fixture or version change |
-| `V8` | `Pending` |
-| `V9` | `Pending` |
+| `V8` | Passed — create/list/focus tests, schema artifact current, method shapes v1 contract pass, no fixture diff, `PROTOCOL_VERSION` 22 |
+| `V9` | Passed — key resolution, wrap both ways, jump, plain-pane no-ops, strip click routing over split handles, no hits without top border, pane cycling skips hidden members |
 | `V10` | `Pending` |
 | `V11` | `Pending` |
 | `V12` | `Pending` |
@@ -394,6 +394,8 @@ harden → Deliver
 - G3: one-line `pub(crate) use` re-exports in `src/app/mod.rs` and `src/client/mod.rs`; new `AppState.status_indicators` fed from config (construction and reload). Badge without an urgent hidden status renders `[i/n]` with the reserved cell left as border line; unfocused active member uses `palette.text` bold.
 - G3: a stack member's terminal title change (when the title is its strip label) requests a full render (`c721641b`); plain PTY output still does not.
 - Open for overall: hidden members with a pending agent resume plan resume only when activated (resume candidates come from layout leaves).
+- G4: handler in new `src/app/api/subpanes.rs`, client logic in new `src/client/shell/subpanes.rs`. `ClientShellPane.subpane` serializes as `null` when absent (no `skip_serializing_if`, required by the snapshot bincode round-trip test); older clients ignore it. `focus: false` on `pane.subpane.create` still shows the new member in its slot; it only skips moving focus. Keys are spelled `prefix+period`/`prefix+comma`.
+- G4: `prefix+tab` pane cycling now skips hidden members (`G4-VER1`). Older clients connected to this server still see hidden members in `snapshot.panes` and can cycle into them (activating them).
 - G1: commit `0f6ecbc0` body says `Task: G1-T3 — Include hidden subpanes in pane and agent lists`; the plan title is `Include hidden members in data lists` (history not rewritten).
 
 ### Completion Summary
