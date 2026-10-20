@@ -223,6 +223,16 @@ impl Tab {
             .map(|(_, pane)| pane)
     }
 
+    /// Pane ids in layout order, each stack leaf followed by its hidden
+    /// members.
+    pub(crate) fn pane_ids_with_subpanes(&self) -> Vec<PaneId> {
+        let layout_ids = self.layout.pane_ids();
+        if self.subpanes.is_empty() {
+            return layout_ids;
+        }
+        self.subpanes.ordered_ids(&layout_ids)
+    }
+
     /// Remove a stack member, showing a neighbor when it was the active one.
     /// Returns `None` when `pane_id` is not in a stack.
     pub(crate) fn take_subpane_member(&mut self, pane_id: PaneId) -> Option<PaneState> {
@@ -475,6 +485,7 @@ mod tests {
 mod lifecycle_tests {
     use ratatui::layout::Direction;
 
+    use crate::api::schema::AgentStatus;
     use crate::app::AppState;
     use crate::detect::{Agent, AgentState};
     use crate::events::AppEvent;
@@ -620,14 +631,22 @@ mod lifecycle_tests {
     }
 
     #[test]
-    fn subpane_hidden_agent_stays_unseen_until_activated() {
+    fn subpane_hidden_agent_reports_done_in_lists_until_activated() {
         let (ws, root, _member) = single_slot_stack();
-        let mut state = app_with(ws);
-        state.outer_terminal_focus = Some(true);
-        let terminal_id = state.terminal_id_for_pane(0, root).unwrap();
-        state.terminals.get_mut(&terminal_id).unwrap().state = AgentState::Working;
+        let (_api_tx, api_rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = crate::app::App::new(
+            &crate::config::Config::default(),
+            crate::app::AppPolicy::TEST,
+            None,
+            api_rx,
+            crate::api::EventHub::default(),
+        );
+        app.state = app_with(ws);
+        app.state.outer_terminal_focus = Some(true);
+        let terminal_id = app.state.terminal_id_for_pane(0, root).unwrap();
+        app.state.terminals.get_mut(&terminal_id).unwrap().state = AgentState::Working;
 
-        state.handle_app_event(AppEvent::StateChanged {
+        app.state.handle_app_event(AppEvent::StateChanged {
             pane_id: root,
             agent: Some(Agent::Pi),
             state: AgentState::Idle,
@@ -636,11 +655,27 @@ mod lifecycle_tests {
             process_exited: false,
             observed_at: std::time::Instant::now(),
         });
-        state.switch_workspace_tab(0, 0);
-        state.mark_active_tab_seen();
-        assert!(!state.workspaces[0].pane_state(root).unwrap().seen);
+        app.state.switch_workspace_tab(0, 0);
+        app.state.mark_active_tab_seen();
 
-        assert!(state.focus_pane_in_workspace(0, root));
-        assert!(state.workspaces[0].pane_state(root).unwrap().seen);
+        let hidden_status = |app: &crate::app::App| {
+            let snapshot = app.session_snapshot();
+            let pane = snapshot
+                .panes
+                .iter()
+                .find(|pane| pane.terminal_id == terminal_id.to_string())
+                .expect("hidden member is listed");
+            let agent = snapshot
+                .agents
+                .iter()
+                .find(|agent| agent.terminal_id == terminal_id.to_string())
+                .expect("hidden agent is listed");
+            assert_eq!(agent.agent_status, pane.agent_status);
+            pane.agent_status
+        };
+        assert_eq!(hidden_status(&app), AgentStatus::Done);
+
+        assert!(app.state.focus_pane_in_workspace(0, root));
+        assert_eq!(hidden_status(&app), AgentStatus::Idle);
     }
 }

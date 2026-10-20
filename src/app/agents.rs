@@ -27,8 +27,7 @@ impl App {
             .enumerate()
             .flat_map(|(ws_idx, ws)| {
                 ws.tabs.iter().flat_map(move |tab| {
-                    tab.layout
-                        .pane_ids()
+                    tab.pane_ids_with_subpanes()
                         .into_iter()
                         .filter_map(move |pane_id| self.agent_info(ws_idx, pane_id))
                 })

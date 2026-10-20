@@ -23,8 +23,7 @@ impl Tab {
         terminals: &HashMap<TerminalId, TerminalState>,
         tab_idx: usize,
     ) -> Vec<PaneDetail> {
-        self.layout
-            .pane_ids()
+        self.pane_ids_with_subpanes()
             .iter()
             .filter_map(|id| {
                 let pane = self.panes.get(id)?;

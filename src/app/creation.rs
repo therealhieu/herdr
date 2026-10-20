@@ -180,7 +180,7 @@ impl App {
             Ok(ws
                 .tabs
                 .iter()
-                .flat_map(|tab| tab.layout.pane_ids().into_iter())
+                .flat_map(|tab| tab.pane_ids_with_subpanes().into_iter())
                 .filter_map(|pane_id| self.pane_info(ws_idx, pane_id))
                 .collect())
         } else {
@@ -192,7 +192,7 @@ impl App {
                 .flat_map(|(ws_idx, ws)| {
                     ws.tabs
                         .iter()
-                        .flat_map(|tab| tab.layout.pane_ids().into_iter())
+                        .flat_map(|tab| tab.pane_ids_with_subpanes().into_iter())
                         .filter_map(move |pane_id| self.pane_info(ws_idx, pane_id))
                 })
                 .collect())

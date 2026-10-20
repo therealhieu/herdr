@@ -292,8 +292,7 @@ impl AppState {
             .enumerate()
             .flat_map(|(ws_idx, ws)| {
                 ws.tabs.iter().flat_map(move |tab| {
-                    tab.layout
-                        .pane_ids()
+                    tab.pane_ids_with_subpanes()
                         .into_iter()
                         .filter_map(move |pane_id| {
                             ws.pane_state(pane_id)
@@ -345,8 +344,7 @@ impl AppState {
             .enumerate()
             .flat_map(|(ws_idx, workspace)| {
                 workspace.tabs.iter().flat_map(move |tab| {
-                    tab.layout
-                        .pane_ids()
+                    tab.pane_ids_with_subpanes()
                         .into_iter()
                         .filter_map(move |pane_id| {
                             workspace
@@ -598,7 +596,7 @@ impl AppState {
             .get(ws_idx)
             .into_iter()
             .flat_map(|ws| &ws.tabs)
-            .flat_map(|tab| tab.layout.pane_ids())
+            .flat_map(|tab| tab.pane_ids_with_subpanes())
             .collect()
     }
 
@@ -620,7 +618,7 @@ impl AppState {
         self.workspaces
             .get(ws_idx)
             .and_then(|ws| ws.tabs.get(tab_idx))
-            .map(|tab| tab.layout.pane_ids())
+            .map(|tab| tab.pane_ids_with_subpanes())
             .unwrap_or_default()
     }
 

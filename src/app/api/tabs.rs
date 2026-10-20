@@ -229,7 +229,7 @@ impl App {
         let pane_ids = ws
             .tabs
             .get(tab_idx)
-            .map(|tab| tab.layout.pane_ids())
+            .map(|tab| tab.pane_ids_with_subpanes())
             .unwrap_or_default();
 
         if closes_workspace {
