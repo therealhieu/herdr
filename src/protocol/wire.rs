@@ -1064,8 +1064,9 @@ pub struct ClientShellPane {
     pub foreground_cwd: Option<String>,
     pub focused: bool,
     pub right_click_passthrough: bool,
-    /// Set when the pane shares its slot with other terminals.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Set when the pane shares its slot with other terminals. Always
+    /// serialized so the struct keeps a fixed bincode shape.
+    #[serde(default)]
     pub subpane: Option<crate::api::schema::PaneSubpaneInfo>,
 }
 
