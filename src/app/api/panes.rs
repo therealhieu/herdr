@@ -492,13 +492,22 @@ impl App {
         let Some((ws_idx, pane_id)) = self.parse_pane_id(&target.pane_id) else {
             return pane_not_found(id, &target.pane_id);
         };
-        let Some(_tab_idx) = self.state.workspaces[ws_idx].find_tab_index_for_pane(pane_id) else {
+        let Some(tab_idx) = self.state.workspaces[ws_idx].find_tab_index_for_pane(pane_id) else {
             return pane_not_found(id, &target.pane_id);
         };
+        let is_hidden = |state: &crate::app::AppState| {
+            state.workspaces[ws_idx].tabs[tab_idx]
+                .subpanes
+                .is_hidden(pane_id)
+        };
+        let was_hidden = is_hidden(&self.state);
 
         self.state.focus_pane_in_workspace(ws_idx, pane_id);
         self.state.mark_active_tab_seen();
         self.state.mode = crate::app::Mode::Terminal;
+        if was_hidden && !is_hidden(&self.state) {
+            self.emit_layout_updated_event(ws_idx, tab_idx);
+        }
 
         let Some(pane) = self.pane_info(ws_idx, pane_id) else {
             return pane_not_found(id, &target.pane_id);
@@ -2205,15 +2214,12 @@ impl App {
             .workspaces
             .get(ws_idx)?
             .find_tab_index_for_pane(pane_id)?;
-        let pane_count = self
-            .state
-            .workspaces
-            .get(ws_idx)?
-            .tabs
-            .get(tab_idx)?
-            .layout
-            .pane_count();
-        (pane_count > 1).then_some((ws_idx, tab_idx))
+        let tab = self.state.workspaces.get(ws_idx)?.tabs.get(tab_idx)?;
+        // Removing a slot's active stack member shows another member there,
+        // which changes the layout even when the tab has a single leaf.
+        let replaces_stack_leaf =
+            tab.subpanes.contains(pane_id) && !tab.subpanes.is_hidden(pane_id);
+        (tab.layout.pane_count() > 1 || replaces_stack_leaf).then_some((ws_idx, tab_idx))
     }
 }
 
@@ -4696,6 +4702,14 @@ mod tests {
         }
     }
 
+    fn layout_updated_count(app: &App) -> usize {
+        app.event_hub
+            .events_after(0)
+            .iter()
+            .filter(|(_, envelope)| envelope.event == EventKind::LayoutUpdated)
+            .count()
+    }
+
     #[test]
     fn subpane_move_onto_hidden_member_splits_next_to_visible_leaf() {
         let mut app = app_with_linked_worktree();
@@ -4764,6 +4778,54 @@ mod tests {
         let tab = &app.state.workspaces[0].tabs[0];
         assert_eq!(tab.layout.pane_ids(), vec![other, visible]);
         assert!(tab.subpanes.is_hidden(hidden));
+        app.state.assert_invariants_for_test();
+    }
+
+    #[test]
+    fn subpane_focusing_hidden_member_emits_layout_updated() {
+        let (mut app, _) = app_with_test_workspace();
+        let hidden = app.state.workspaces[0].tabs[0].root_pane;
+        let visible = app.state.workspaces[0].test_add_subpane(hidden);
+        let hidden_public = app.public_pane_id(0, hidden).unwrap();
+        app.state.active = Some(0);
+        app.state.ensure_test_terminals();
+
+        let response = app.handle_pane_focus(
+            "req".into(),
+            PaneTarget {
+                pane_id: hidden_public,
+            },
+        );
+
+        let _: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let tab = &app.state.workspaces[0].tabs[0];
+        assert_eq!(tab.layout.pane_ids(), vec![hidden]);
+        assert!(tab.subpanes.is_hidden(visible));
+        assert_eq!(layout_updated_count(&app), 1);
+    }
+
+    #[test]
+    fn subpane_closing_active_member_of_single_slot_emits_layout_updated() {
+        let (mut app, _) = app_with_test_workspace();
+        let hidden = app.state.workspaces[0].tabs[0].root_pane;
+        let visible = app.state.workspaces[0].test_add_subpane(hidden);
+        let visible_public = app.public_pane_id(0, visible).unwrap();
+        app.state.active = Some(0);
+        app.state.ensure_test_terminals();
+
+        let response = app.handle_pane_close(
+            "req".into(),
+            PaneTarget {
+                pane_id: visible_public,
+            },
+        );
+
+        let _: SuccessResponse = serde_json::from_str(&response).unwrap();
+        assert_eq!(
+            app.state.workspaces[0].tabs[0].layout.pane_ids(),
+            vec![hidden]
+        );
+        assert_eq!(layout_updated_count(&app), 1);
         app.state.assert_invariants_for_test();
     }
 }
