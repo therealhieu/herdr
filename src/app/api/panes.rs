@@ -4797,7 +4797,13 @@ mod tests {
             },
         );
 
-        let _: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let ResponseResult::PaneInfo { pane } = success.result else {
+            panic!("expected pane info response");
+        };
+        let subpane = pane.subpane.expect("stack member reports its slot");
+        assert_eq!(subpane.visible_pane_id, pane.pane_id);
+        assert_eq!((subpane.index, subpane.count), (0, 2));
         let tab = &app.state.workspaces[0].tabs[0];
         assert_eq!(tab.layout.pane_ids(), vec![hidden]);
         assert!(tab.subpanes.is_hidden(visible));

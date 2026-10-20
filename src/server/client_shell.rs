@@ -145,6 +145,7 @@ pub(super) fn snapshot_with_completions(
                 foreground_cwd: pane.foreground_cwd,
                 focused,
                 right_click_passthrough,
+                subpane: pane.subpane,
             }
         })
         .collect();

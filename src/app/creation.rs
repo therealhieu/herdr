@@ -362,6 +362,27 @@ impl App {
             agent_session: terminal_agent_session_info(terminal),
             scroll: None,
             revision: terminal.revision,
+            subpane: self.pane_subpane_info(ws_idx, tab_idx, pane_id, terminal),
+        })
+    }
+
+    fn pane_subpane_info(
+        &self,
+        ws_idx: usize,
+        tab_idx: usize,
+        pane_id: crate::layout::PaneId,
+        terminal: &crate::terminal::TerminalState,
+    ) -> Option<crate::api::schema::PaneSubpaneInfo> {
+        let stack = self.state.workspaces[ws_idx].tabs[tab_idx]
+            .subpanes
+            .stack_of(pane_id)?;
+        let members = stack.members();
+        let index = members.iter().position(|&member| member == pane_id)?;
+        Some(crate::api::schema::PaneSubpaneInfo {
+            visible_pane_id: self.public_pane_id(ws_idx, stack.active_member())?,
+            index: u32::try_from(index).ok()?,
+            count: u32::try_from(members.len()).ok()?,
+            label: crate::subpane_strip::subpane_label(terminal),
         })
     }
 

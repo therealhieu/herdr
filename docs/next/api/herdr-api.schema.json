@@ -835,6 +835,17 @@
               },
               "type": "object"
             },
+            "subpane": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/event/$defs/PaneSubpaneInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Set when the pane is one of several terminals sharing one pane slot."
+            },
             "tab_id": {
               "type": "string"
             },
@@ -1025,6 +1036,36 @@
             "offset_from_bottom",
             "max_offset_from_bottom",
             "viewport_rows"
+          ],
+          "type": "object"
+        },
+        "PaneSubpaneInfo": {
+          "description": "A pane's place in a pane slot that holds several terminals.",
+          "properties": {
+            "count": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "index": {
+              "description": "Zero-based position of this pane among the slot's members.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "label": {
+              "type": "string"
+            },
+            "visible_pane_id": {
+              "description": "The member currently shown in the slot.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "visible_pane_id",
+            "index",
+            "count",
+            "label"
           ],
           "type": "object"
         },
@@ -3259,6 +3300,28 @@
           },
           "required": [
             "direction"
+          ],
+          "type": "object"
+        },
+        "PaneSubpaneCreateParams": {
+          "description": "Start a shell as a new member of the pane slot holding `pane_id` and show it.",
+          "properties": {
+            "cwd": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "focus": {
+              "default": true,
+              "type": "boolean"
+            },
+            "pane_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pane_id"
           ],
           "type": "object"
         },
@@ -6312,6 +6375,22 @@
             "params"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "pane.subpane.create",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/PaneSubpaneCreateParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
         }
       ],
       "properties": {
@@ -7943,6 +8022,17 @@
               },
               "type": "object"
             },
+            "subpane": {
+              "anyOf": [
+                {
+                  "$ref": "#/schemas/success_response/$defs/PaneSubpaneInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Set when the pane is one of several terminals sharing one pane slot."
+            },
             "tab_id": {
               "type": "string"
             },
@@ -8444,6 +8534,36 @@
             "offset_from_bottom",
             "max_offset_from_bottom",
             "viewport_rows"
+          ],
+          "type": "object"
+        },
+        "PaneSubpaneInfo": {
+          "description": "A pane's place in a pane slot that holds several terminals.",
+          "properties": {
+            "count": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "index": {
+              "description": "Zero-based position of this pane among the slot's members.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "label": {
+              "type": "string"
+            },
+            "visible_pane_id": {
+              "description": "The member currently shown in the slot.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "visible_pane_id",
+            "index",
+            "count",
+            "label"
           ],
           "type": "object"
         },

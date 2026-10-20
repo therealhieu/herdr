@@ -1156,6 +1156,7 @@ mod tests {
             agent_session: None,
             scroll: None,
             revision: 0,
+            subpane: None,
         }
     }
 

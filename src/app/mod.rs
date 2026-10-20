@@ -2775,6 +2775,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn subpane_create_request_adds_member_and_lists_it_after_its_slot() {
+        let _guard = config_env_lock().lock().unwrap();
+        let original_shell = std::env::var_os("SHELL");
+        std::env::set_var("SHELL", exiting_test_command());
+
+        let mut app = test_app();
+        let workspace = Workspace::test_new("api-pane-subpane-create");
+        let target_pane = workspace.tabs[0].root_pane;
+        app.state.workspaces = vec![workspace];
+        app.state.ensure_test_terminals();
+        app.state.active = Some(0);
+        app.state.selected = 0;
+        let target_pane_id = app.pane_info(0, target_pane).unwrap().pane_id;
+
+        let response = app.handle_api_request(crate::api::schema::Request {
+            id: "req_pane_subpane_create".into(),
+            method: crate::api::schema::Method::PaneSubpaneCreate(
+                crate::api::schema::PaneSubpaneCreateParams {
+                    pane_id: target_pane_id.clone(),
+                    cwd: None,
+                    focus: true,
+                },
+            ),
+        });
+        let response: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+        assert_eq!(response["result"]["type"], "pane_info");
+        let created = response["result"]["pane"].clone();
+        let created_id = created["pane_id"].as_str().unwrap().to_owned();
+        assert_eq!(created["focused"], true);
+        assert_eq!(
+            created["subpane"],
+            serde_json::json!({
+                "visible_pane_id": created_id,
+                "index": 1,
+                "count": 2,
+                "label": "shell",
+            })
+        );
+        let (_, created_raw) = app.parse_pane_id(&created_id).unwrap();
+        let tab = &app.state.workspaces[0].tabs[0];
+        assert_eq!(tab.layout.pane_ids(), vec![created_raw]);
+        assert!(tab.subpanes.is_hidden(target_pane));
+        app.state.assert_invariants_for_test();
+
+        let listed = app.collect_panes_for_workspace(None).unwrap();
+        let listed: Vec<_> = listed
+            .iter()
+            .map(|pane| {
+                let subpane = pane.subpane.as_ref().unwrap();
+                (
+                    pane.pane_id.as_str(),
+                    subpane.visible_pane_id.as_str(),
+                    subpane.index,
+                )
+            })
+            .collect();
+        assert_eq!(
+            listed,
+            vec![
+                (created_id.as_str(), created_id.as_str(), 1),
+                (target_pane_id.as_str(), created_id.as_str(), 0),
+            ]
+        );
+
+        let runtimes: Vec<_> = app.terminal_runtimes.drain().collect();
+        for (_terminal_id, runtime) in runtimes {
+            runtime.shutdown();
+        }
+        match original_shell {
+            Some(value) => std::env::set_var("SHELL", value),
+            None => std::env::remove_var("SHELL"),
+        }
+    }
+
+    #[tokio::test]
     async fn pane_split_request_applies_ratio() {
         let _guard = config_env_lock().lock().unwrap();
         let original_shell = std::env::var_os("SHELL");

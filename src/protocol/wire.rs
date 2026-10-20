@@ -1064,6 +1064,9 @@ pub struct ClientShellPane {
     pub foreground_cwd: Option<String>,
     pub focused: bool,
     pub right_click_passthrough: bool,
+    /// Set when the pane shares its slot with other terminals.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subpane: Option<crate::api::schema::PaneSubpaneInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2850,6 +2853,7 @@ mod tests {
                 foreground_cwd: Some("/repo".into()),
                 focused: true,
                 right_click_passthrough: false,
+                subpane: None,
             }],
             agents: Vec::new(),
             commands: vec![ClientShellCommand {

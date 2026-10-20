@@ -319,9 +319,7 @@ impl Tab {
 impl Workspace {
     /// Spawn a shell as a new member of the slot holding `pane_id`. Returns
     /// `None` when the pane is not in this workspace.
-    // Mirrors the split spawn arguments. Only the JSON API creates members, and
-    // that handler lands separately from the stack model.
-    #[allow(clippy::too_many_arguments, dead_code)]
+    #[allow(clippy::too_many_arguments)] // Mirrors the split spawn arguments.
     pub fn spawn_subpane(
         &mut self,
         pane_id: PaneId,
