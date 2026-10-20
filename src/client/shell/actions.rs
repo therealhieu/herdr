@@ -1063,10 +1063,17 @@ impl ClientShellState {
             }
             KeybindAction::CyclePaneNext | KeybindAction::CyclePanePrevious => {
                 let focused_tab = focused_tab?;
+                // Hidden subpane members share their slot's place in the
+                // layout, so cycling steps between slots, not members.
                 let panes = snapshot
                     .panes
                     .iter()
                     .filter(|pane| pane.tab_id == focused_tab)
+                    .filter(|pane| {
+                        pane.subpane
+                            .as_ref()
+                            .is_none_or(|subpane| subpane.visible_pane_id == pane.pane_id)
+                    })
                     .collect::<Vec<_>>();
                 if panes.is_empty() {
                     return None;

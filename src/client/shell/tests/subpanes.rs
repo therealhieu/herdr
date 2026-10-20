@@ -111,6 +111,44 @@ fn subpane_keys_step_with_wrap_and_jump_by_index() {
     assert_eq!(focused_pane(&previous), Some("pane_1"));
 }
 
+/// A plain `pane_0` beside a slot showing `pane_1`, with `focused` in focus.
+fn plain_and_stack_snapshot(focused: &str) -> ClientShellSnapshot {
+    let mut projected = stacked_snapshot();
+    let plain = ClientShellPane {
+        pane_id: "pane_0".into(),
+        focused: focused == "pane_0",
+        subpane: None,
+        ..snapshot().panes[0].clone()
+    };
+    projected.panes.insert(0, plain);
+    for pane in &mut projected.panes {
+        pane.focused = pane.pane_id == focused;
+    }
+    projected.focused_pane_id = Some(focused.into());
+    projected
+}
+
+#[test]
+fn pane_cycle_keys_step_between_slots_and_skip_hidden_members() {
+    for action in [
+        KeybindAction::CyclePaneNext,
+        KeybindAction::CyclePanePrevious,
+    ] {
+        let mut state = shell_state(plain_and_stack_snapshot("pane_0"));
+        assert_eq!(
+            focused_pane(&press(&mut state, action)),
+            Some("pane_1"),
+            "{action:?} from the plain pane"
+        );
+        let mut state = shell_state(plain_and_stack_snapshot("pane_1"));
+        assert_eq!(
+            focused_pane(&press(&mut state, action)),
+            Some("pane_0"),
+            "{action:?} from the visible member"
+        );
+    }
+}
+
 #[test]
 fn subpane_switch_keys_do_nothing_on_a_plain_pane() {
     let mut state = shell_state(snapshot());
