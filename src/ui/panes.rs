@@ -57,12 +57,30 @@ fn tab_multi_pane(tab: &crate::workspace::Tab) -> bool {
 }
 
 fn tab_pane_chrome(app: &AppState, tab: &crate::workspace::Tab, area: Rect) -> Vec<PaneInfo> {
-    apply_pane_chrome_for(
-        tab.layout.panes(area),
-        tab_multi_pane(tab),
+    apply_tab_pane_chrome(
+        tab,
+        area,
         app.pane_borders,
         app.pane_gaps,
         app.pane_outer_borders,
+    )
+}
+
+/// Lay out `tab` in `area` with the same chrome the renderer gives it,
+/// treating a slot that holds a subpane stack as multi-pane.
+pub(crate) fn apply_tab_pane_chrome(
+    tab: &crate::workspace::Tab,
+    area: Rect,
+    pane_borders: crate::config::PaneBordersConfig,
+    pane_gaps: bool,
+    pane_outer_borders: bool,
+) -> Vec<PaneInfo> {
+    apply_pane_chrome_for(
+        tab.layout.panes(area),
+        tab_multi_pane(tab),
+        pane_borders,
+        pane_gaps,
+        pane_outer_borders,
     )
 }
 
