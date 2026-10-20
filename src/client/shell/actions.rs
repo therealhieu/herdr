@@ -864,8 +864,8 @@ impl ClientShellState {
     ) -> Option<crate::api::schema::Method> {
         use crate::api::schema::{
             Method, PaneDirection, PaneFocusDirectionParams, PaneResizeParams, PaneSplitParams,
-            PaneSwapParams, PaneTarget, PaneZoomMode, PaneZoomParams, SplitDirection,
-            TabCreateParams, TabMoveParams, TabTarget, WorkspaceTarget,
+            PaneSubpaneCreateParams, PaneSwapParams, PaneTarget, PaneZoomMode, PaneZoomParams,
+            SplitDirection, TabCreateParams, TabMoveParams, TabTarget, WorkspaceTarget,
         };
         use crate::input::KeybindAction;
 
@@ -1063,10 +1063,17 @@ impl ClientShellState {
             }
             KeybindAction::CyclePaneNext | KeybindAction::CyclePanePrevious => {
                 let focused_tab = focused_tab?;
+                // Hidden subpane members share their slot's place in the
+                // layout, so cycling steps between slots, not members.
                 let panes = snapshot
                     .panes
                     .iter()
                     .filter(|pane| pane.tab_id == focused_tab)
+                    .filter(|pane| {
+                        pane.subpane
+                            .as_ref()
+                            .is_none_or(|subpane| subpane.visible_pane_id == pane.pane_id)
+                    })
                     .collect::<Vec<_>>();
                 if panes.is_empty() {
                     return None;
@@ -1099,6 +1106,16 @@ impl ClientShellState {
             KeybindAction::Zoom => Some(Method::PaneZoom(PaneZoomParams {
                 pane_id: focused_pane,
                 mode: PaneZoomMode::Toggle,
+            })),
+            KeybindAction::NewSubpane => Some(Method::PaneSubpaneCreate(PaneSubpaneCreateParams {
+                pane_id: focused_pane?,
+                cwd: None,
+                focus: true,
+            })),
+            KeybindAction::NextSubpane
+            | KeybindAction::PreviousSubpane
+            | KeybindAction::FocusSubpane(_) => Some(Method::PaneFocus(PaneTarget {
+                pane_id: super::subpanes::switch_target(snapshot, action)?,
             })),
             KeybindAction::ClearPane => Some(Method::PaneClear(PaneTarget {
                 pane_id: focused_pane?,

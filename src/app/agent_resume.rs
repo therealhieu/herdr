@@ -173,6 +173,7 @@ impl App {
             }
         }
 
+        append_hidden_subpane_infos(tab, &mut pane_infos);
         pane_infos
     }
 
@@ -188,18 +189,20 @@ impl App {
         }
         let Some((pane_id, cwd, plan)) = self.state.workspaces.iter().find_map(|ws| {
             ws.tabs.iter().find_map(|tab| {
-                tab.layout.pane_ids().into_iter().find_map(|pane_id| {
-                    let pane = tab.panes.get(&pane_id)?;
-                    if &pane.attached_terminal_id != terminal_id {
-                        return None;
-                    }
-                    let terminal = self.state.terminals.get(terminal_id)?;
-                    Some((
-                        pane_id,
-                        terminal.cwd.clone(),
-                        terminal.pending_agent_resume_plan.clone()?,
-                    ))
-                })
+                tab.pane_ids_with_subpanes()
+                    .into_iter()
+                    .find_map(|pane_id| {
+                        let pane = tab.panes.get(&pane_id)?;
+                        if &pane.attached_terminal_id != terminal_id {
+                            return None;
+                        }
+                        let terminal = self.state.terminals.get(terminal_id)?;
+                        Some((
+                            pane_id,
+                            terminal.cwd.clone(),
+                            terminal.pending_agent_resume_plan.clone()?,
+                        ))
+                    })
             })
         }) else {
             return false;
@@ -325,8 +328,9 @@ fn derived_pending_agent_resume_pane_infos(
     pane_gaps: bool,
     pane_outer_borders: bool,
 ) -> Vec<crate::layout::PaneInfo> {
-    crate::ui::apply_pane_chrome(
-        tab.layout.panes(terminal_area),
+    crate::ui::apply_tab_pane_chrome(
+        tab,
+        terminal_area,
         pane_borders,
         pane_gaps,
         pane_outer_borders,
@@ -338,6 +342,31 @@ fn derived_pending_agent_resume_pane_infos(
         info
     })
     .collect()
+}
+
+/// Hidden stack members share their slot's geometry, so each one resumes at
+/// the size of the visible leaf it sits behind.
+fn append_hidden_subpane_infos(
+    tab: &crate::workspace::Tab,
+    pane_infos: &mut Vec<crate::layout::PaneInfo>,
+) {
+    if tab.subpanes.is_empty() {
+        return;
+    }
+    let hidden: Vec<crate::layout::PaneInfo> = pane_infos
+        .iter()
+        .filter_map(|leaf| Some((leaf, tab.subpanes.stack_of(leaf.id)?)))
+        .flat_map(|(leaf, stack)| {
+            stack
+                .hidden_members()
+                .map(|member| crate::layout::PaneInfo {
+                    id: member,
+                    is_focused: false,
+                    ..leaf.clone()
+                })
+        })
+        .collect();
+    pane_infos.extend(hidden);
 }
 
 fn stable_terminal_inner_rect(pane_inner: Rect) -> Rect {
@@ -947,6 +976,98 @@ mod tests {
                 .current_size(),
             (28, 98)
         );
+
+        for (_, runtime) in app.terminal_runtimes.drain() {
+            runtime.shutdown();
+        }
+    }
+
+    #[tokio::test]
+    async fn pending_resume_geometry_borders_a_single_slot_stack_like_the_renderer() {
+        let mut state = crate::app::AppState::test_new();
+        state.pane_borders = crate::config::PaneBordersConfig::Auto;
+        let mut ws = crate::workspace::Workspace::test_new("stack");
+        let root = ws.tabs[0].root_pane;
+        ws.test_add_subpane(root);
+        let visible = ws.tabs[0].layout.focused();
+        let terminal_id = ws.tabs[0].terminal_id(visible).unwrap().clone();
+        state.workspaces = vec![ws];
+        state.active = Some(0);
+        let mut runtimes = crate::terminal::TerminalRuntimeRegistry::new();
+        runtimes.insert(
+            terminal_id,
+            crate::terminal::TerminalRuntime::test_with_scrollback_bytes(10, 4, 1024, b""),
+        );
+        let area = Rect::new(0, 0, 60, 20);
+
+        let pending = derived_pending_agent_resume_pane_infos(
+            &state.workspaces[0].tabs[0],
+            area,
+            state.pane_borders,
+            state.pane_gaps,
+            state.pane_outer_borders,
+        );
+        crate::ui::compute_view_without_resizing_panes(&mut state, &runtimes, area);
+
+        let pending = pending.iter().find(|info| info.id == visible).unwrap();
+        let rendered = state
+            .view
+            .pane_infos
+            .iter()
+            .find(|info| info.id == visible)
+            .unwrap();
+        assert_eq!(pending.borders, ratatui::widgets::Borders::ALL);
+        assert_eq!(pending.borders, rendered.borders);
+        assert_eq!(pending.inner_rect, rendered.inner_rect);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn pending_agent_resume_launches_hidden_subpane_member_with_slot_size() {
+        let mut app = test_app();
+        let mut workspace = crate::workspace::Workspace::test_new("stack");
+        let hidden = workspace.tabs[0].root_pane;
+        workspace.test_split(ratatui::layout::Direction::Horizontal);
+        let visible = workspace.test_add_subpane(hidden);
+        let hidden_terminal = workspace.terminal_id(hidden).cloned().unwrap();
+        app.state.view.terminal_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+        app.state.workspaces = vec![workspace];
+        app.state.active = Some(0);
+        app.state.ensure_test_terminals();
+        app.state
+            .terminals
+            .get_mut(&hidden_terminal)
+            .expect("test terminal should exist")
+            .pending_agent_resume_plan = Some(crate::agent_resume::AgentResumePlan {
+            agent: "codex".into(),
+            argv: long_running_test_argv(),
+            dedupe_key: "herdr:codex\0codex\0Id\0codex-session".into(),
+        });
+        let tab = &app.state.workspaces[0].tabs[0];
+        assert!(tab.subpanes.is_hidden(hidden));
+        let slot = derived_pending_agent_resume_pane_infos(
+            tab,
+            app.state.view.terminal_area,
+            app.state.pane_borders,
+            app.state.pane_gaps,
+            app.state.pane_outer_borders,
+        )
+        .into_iter()
+        .find(|info| info.id == visible)
+        .expect("visible member should be a layout leaf")
+        .inner_rect;
+
+        assert!(app.start_pending_agent_resumes(Instant::now(), true));
+        assert_eq!(
+            app.terminal_runtimes
+                .get(&hidden_terminal)
+                .expect("hidden member should resume without being activated")
+                .current_size(),
+            (slot.height, slot.width)
+        );
+        let tab = &app.state.workspaces[0].tabs[0];
+        assert!(tab.subpanes.is_hidden(hidden));
+        assert_eq!(tab.subpanes.visible_leaf(hidden), visible);
 
         for (_, runtime) in app.terminal_runtimes.drain() {
             runtime.shutdown();

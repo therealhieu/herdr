@@ -994,6 +994,11 @@ impl ClientShellState {
                         .nth(*index)
                 })
                 .is_some(),
+            KeybindMatch::Action(action @ KeybindAction::FocusSubpane(_)) => self
+                .snapshot
+                .as_deref()
+                .and_then(|snapshot| super::subpanes::switch_target(snapshot, *action))
+                .is_some(),
             KeybindMatch::Action(KeybindAction::FocusAgent(index)) => {
                 super::aggregate_navigation::online_agent_targets(
                     &self.endpoints,

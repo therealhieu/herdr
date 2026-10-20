@@ -174,6 +174,13 @@ pub(crate) fn keybind_help_groups(
                 entry(binding_label(&keybinds.clear_pane), "clear pane"),
                 entry(binding_label(&keybinds.copy_mode), "copy mode"),
                 entry(binding_label(&keybinds.zoom), "zoom pane"),
+                entry(binding_label(&keybinds.new_subpane), "new subpane"),
+                entry(binding_label(&keybinds.next_subpane), "next subpane"),
+                entry(
+                    binding_label(&keybinds.previous_subpane),
+                    "previous subpane",
+                ),
+                entry(indexed_label(&keybinds.subpane), "subpane 1-9"),
                 entry(binding_label(&keybinds.resize_mode), "resize mode"),
                 entry(
                     binding_label(&keybinds.resize_pane_left),

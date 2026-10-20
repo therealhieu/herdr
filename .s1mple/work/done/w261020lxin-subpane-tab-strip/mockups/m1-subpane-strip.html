@@ -1,0 +1,641 @@
+<title>M1@R1 — Subpane strip</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column. Controls, then the terminal mockup (scrolls sideways on its own), then tree + guide side by side. */
+:root {
+  --bg: #eef1ee; --surface: #ffffff; --fg: #18201c; --muted: #58645e; --line: #d3dad5;
+  --accent: #0d7a68; --accent-ink: #ffffff;
+  --ok-ink: #0f8a4f; --warn-ink: #a06d00; --done-ink: #2f66c8;
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Terminal palette: a terminal is dark in both page themes, by choice. */
+  --t-bg: #101413; --t-chrome: #0a0d0c; --t-fg: #cdd6d1; --t-bright: #f1f5f2; --t-dim: #6b7771;
+  --t-line: #38423e; --t-sel: #22302b; --t-focus: #5fd3bf; --t-menu: #161c1a;
+  --ok: #0adc78; --warn: #dcb428; --done: #6aa7ff;
+  --c-blue: #82aaff; --c-purple: #c792ea; --c-yellow: #e5c07b; --c-green: #a8d379; --c-orange: #e8946a; --c-red: #f07178;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111514; --surface: #181d1b; --fg: #e2e8e4; --muted: #95a29b; --line: #2a322e;
+    --accent: #5fd3bf; --accent-ink: #0b1210;
+    --ok-ink: #3fe08f; --warn-ink: #e6c04a; --done-ink: #86b6ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111514; --surface: #181d1b; --fg: #e2e8e4; --muted: #95a29b; --line: #2a322e;
+  --accent: #5fd3bf; --accent-ink: #0b1210;
+  --ok-ink: #3fe08f; --warn-ink: #e6c04a; --done-ink: #86b6ff;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); }
+.wrap {
+  max-width: 1120px; margin: 0 auto;
+  padding-block: 32px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 22px;
+}
+h1 { font: 600 clamp(26px, 4vw, 34px)/1.15 var(--mono); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h2 { font: 600 13px/1.3 var(--sans); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 10px; }
+.lede { margin: 8px 0 0; max-width: 66ch; color: var(--muted); }
+.lede code, li code { font: 13px var(--mono); color: var(--fg); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; }
+.group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.group > .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 2px; flex-wrap: wrap; }
+.seg button, .btn {
+  font: 500 13.5px var(--sans); color: var(--fg); background: none; border: 0; border-radius: 6px;
+  padding: 5px 11px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.seg button .k { font-family: var(--mono); opacity: .7; margin-right: 4px; }
+.btn { border: 1px solid var(--line); background: var(--surface); }
+.btn:hover, .seg button:hover:not([aria-pressed="true"]) { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+button:focus-visible, .term:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legend { display: flex; gap: 14px; font: 13px var(--mono); color: var(--muted); margin-left: auto; flex-wrap: wrap; }
+.legend .ok { color: var(--ok-ink); } .legend .warn { color: var(--warn-ink); } .legend .done { color: var(--done-ink); }
+
+.stage { overflow-x: auto; padding-bottom: 6px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.actions .note { font-size: 13px; color: var(--muted); }
+
+/* ---------- terminal mockup ---------- */
+.term {
+  display: grid; grid-template-columns: 158px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 22px;
+  height: 480px; margin: 0 auto; background: var(--t-bg); color: var(--t-fg);
+  font: 13px/18px var(--mono); border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--t-line); transition: width .25s ease;
+}
+.term button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.ws { border-right: 1px solid var(--t-line); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ws-h { color: var(--t-dim); font-size: 11px; letter-spacing: .1em; padding: 0 6px 6px; }
+.ws-item { padding: 3px 6px; border-radius: 3px; display: flex; flex-direction: column; }
+.ws-item.on { background: var(--t-sel); color: var(--t-bright); }
+.ws-item .row { display: flex; justify-content: space-between; gap: 6px; }
+.ws-item small { color: var(--t-dim); font-size: 11px; line-height: 16px; }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.tabbar { display: flex; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--t-line); }
+.tb { padding: 0 8px !important; border-radius: 3px; color: var(--t-dim) !important; }
+.tb.on { background: var(--t-sel) !important; color: var(--t-bright) !important; font-weight: 600; }
+.tb:hover:not(.on) { color: var(--t-fg) !important; }
+.layout { flex: 1; display: flex; gap: 6px; padding: 16px 8px 8px; min-height: 0; }
+.sbar { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; padding: 0 10px; background: var(--t-chrome); color: var(--t-dim); font-size: 12px; line-height: 22px; white-space: nowrap; overflow: hidden; }
+.sbar .msg { color: var(--t-focus); }
+
+.leaf { position: relative; border: 1px solid var(--t-line); min-width: 0; display: flex; flex-direction: column; padding: 11px 8px 4px; }
+.leaf.focus { border-color: var(--t-focus); }
+.leaf[data-mode="B"] { padding-top: 4px; }
+.lhead { position: absolute; top: -10px; left: 8px; right: 8px; height: 18px; display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.leaf[data-mode="D"] .lhead { right: 96px; }
+.lhead > * { flex-shrink: 0; pointer-events: auto; background: var(--t-bg); padding: 0 4px; }
+.ttl { color: var(--t-fg); cursor: grab; }
+.leaf.focus .ttl { color: var(--t-focus); font-weight: 600; }
+.st { color: var(--t-dim); cursor: grab; display: inline-flex; gap: 5px; align-items: center; }
+.st:hover { color: var(--t-fg); }
+.st.on { color: var(--t-bright); font-weight: 600; background: var(--t-sel); }
+.leaf.focus .st.on { color: var(--t-focus); }
+.x { color: var(--t-dim) !important; visibility: hidden; font-weight: 400; }
+.st:hover .x, .st.on .x { visibility: visible; }
+.x:hover { color: var(--c-red) !important; }
+.add { color: var(--t-dim) !important; }
+.add:hover { color: var(--t-bright) !important; }
+.badge { position: absolute; top: -10px; right: 8px; background: var(--t-bg) !important; padding: 0 4px !important; color: var(--t-fg) !important; }
+.badge:hover { color: var(--t-bright) !important; }
+.menu { position: absolute; top: 10px; right: 8px; z-index: 5; min-width: 190px; background: var(--t-menu); border: 1px solid var(--t-line); padding: 4px 0; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.mi { display: flex; justify-content: space-between; padding: 0 8px; }
+.mi:hover { background: var(--t-sel); }
+.mi.on { color: var(--t-focus); }
+.mi .x { visibility: visible; }
+.mi > button:first-child { flex: 1; text-align: left; }
+.mi-add { display: block; width: 100%; text-align: left; padding: 0 8px !important; color: var(--t-dim) !important; border-top: 1px solid var(--t-line) !important; margin-top: 4px; }
+.mi-add:hover { color: var(--t-bright) !important; }
+
+.lbody { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.out { margin: 0; font: inherit; white-space: pre; overflow: hidden; flex: 1; min-height: 0; }
+.strip, .act-h { display: flex; width: 100%; align-items: center; gap: 6px; height: 18px; color: var(--t-dim) !important; text-align: left; flex-shrink: 0; }
+.strip:hover { color: var(--t-fg) !important; }
+.act-h { color: var(--t-bright) !important; font-weight: 600; cursor: grab !important; }
+.leaf.focus .act-h { color: var(--t-focus) !important; }
+.strip .fill, .act-h .fill { flex: 1; border-top: 1px solid var(--t-line); }
+.leaf[data-mode="C"] .lbody { flex-direction: row; }
+.rail { width: 13ch; flex-shrink: 0; border-right: 1px solid var(--t-line); margin-right: 8px; padding-right: 4px; display: flex; flex-direction: column; gap: 1px; }
+.ri { display: flex !important; justify-content: space-between; padding: 0 4px !important; color: var(--t-dim) !important; text-align: left; }
+.ri:hover { color: var(--t-fg) !important; }
+.ri.on { background: var(--t-sel) !important; color: var(--t-bright) !important; font-weight: 600; }
+.rail .add { margin-top: auto; text-align: left; padding: 0 4px !important; }
+.pane-c { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.leaf[data-drop]::after {
+  position: absolute; top: 0; bottom: 0; left: 0; right: 0; z-index: 6; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(95, 211, 191, .14); border: 1px dashed var(--t-focus); color: var(--t-focus); font-weight: 600;
+}
+.leaf[data-drop="merge"]::after { content: "Merge into this stack"; }
+.leaf[data-drop="left"]::after { content: "Split left"; right: 55%; }
+.leaf[data-drop="right"]::after { content: "Split right"; left: 55%; }
+
+.dot { font-weight: 400; }
+.dot.ok { color: var(--ok); animation: pulse 1.6s ease-in-out infinite; }
+.dot.warn { color: var(--warn); }
+.dot.done { color: var(--done); }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .dot.ok { animation: none; } .term { transition: none; } }
+
+.c-dim { color: var(--t-dim); } .c-blue { color: var(--c-blue); } .c-purple { color: var(--c-purple); }
+.c-yellow { color: var(--c-yellow); } .c-green { color: var(--c-green); } .c-orange { color: var(--c-orange); }
+.c-red { color: var(--c-red); } .c-bright { color: var(--t-bright); }
+.cur { background: var(--t-fg); }
+.nv-mode { background: var(--c-blue); color: var(--t-bg); font-weight: 600; }
+.approve { color: var(--t-bg) !important; background: var(--warn) !important; padding: 0 4px !important; font-weight: 600; }
+.approve:hover { filter: brightness(1.1); }
+
+/* ---------- below ---------- */
+.below { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 760px) { .below { grid-template-columns: minmax(0, 1fr); } .legend { margin-left: 0; } }
+.tree { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; font: 13px/1.6 var(--mono); overflow-x: auto; white-space: pre; }
+.tree .dim { color: var(--muted); } .tree .ok { color: var(--ok-ink); } .tree .warn { color: var(--warn-ink); } .tree .done { color: var(--done-ink); }
+.tree .stack { color: var(--accent); font-weight: 600; }
+.cap { font-size: 13.5px; color: var(--muted); margin: 10px 0 0; max-width: 60ch; }
+.guide { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+kbd { font: 12px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--surface); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Herdr Subpanes</h1>
+    <p class="lede">Each pane can hold several terminals, shown as tabs inside the pane. Workspaces and tabs work as they do today. A <code>Stack</code> is a new kind of leaf in each tab's split tree. The mockup below is interactive.</p>
+  </header>
+
+  <div class="controls">
+    <div class="group">
+      <span class="lbl" id="style-lbl">Style</span>
+      <div class="seg" role="group" aria-labelledby="style-lbl" id="style-seg">
+        <button id="st-A" data-style="A"><span class="k">A</span>Tab strip</button>
+        <button id="st-B" data-style="B"><span class="k">B</span>Stacked</button>
+        <button id="st-C" data-style="C"><span class="k">C</span>Side rail</button>
+        <button id="st-D" data-style="D"><span class="k">D</span>Badge</button>
+      </div>
+    </div>
+    <div class="group">
+      <span class="lbl" id="w-lbl">Width</span>
+      <div class="seg" role="group" aria-labelledby="w-lbl" id="w-seg">
+        <button id="w-wide" data-width="wide">Wide</button>
+        <button id="w-narrow" data-width="narrow">Narrow</button>
+      </div>
+    </div>
+    <div class="legend" aria-label="Status legend">
+      <span><span class="ok">●</span> working</span>
+      <span><span class="warn">◐</span> needs you</span>
+      <span><span class="done">✓</span> done</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="term" id="term" tabindex="0" aria-label="Herdr mockup. Keys: [ and ] cycle subpanes, t adds one, x closes one, arrow keys move focus.">
+      <aside class="ws" id="ws"></aside>
+      <div class="main">
+        <nav class="tabbar" id="tabbar"></nav>
+        <div class="layout" id="layout"></div>
+      </div>
+      <footer class="sbar" id="sbar"></footer>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="b-tear">Tear out active subpane</button>
+    <button class="btn" id="b-merge">Merge into neighbor</button>
+    <button class="btn" id="b-block">Block a background agent</button>
+    <button class="btn" id="b-reset">Reset</button>
+    <span class="note">These buttons act on the focused pane, for touch screens where you can't drag.</span>
+  </div>
+
+  <div class="below">
+    <section>
+      <h2>Layout tree (server state)</h2>
+      <pre class="tree" id="tree"></pre>
+      <p class="cap">This tree is what the server owns and saves to <code>session.json</code>. The tab strip, stacked strips, side rail and badge are four TUI renderings of the same tree.</p>
+    </section>
+    <section>
+      <h2>Try it</h2>
+      <ul class="guide">
+        <li>Click a subpane tab to switch. Middle-click or <kbd>×</kbd> closes it.</li>
+        <li>Click <kbd>+</kbd> on a plain pane like <code>nvim</code> to turn it into a stack.</li>
+        <li>Drag a tab onto another pane's center to merge it into that stack, or onto a pane's left or right edge to split it out.</li>
+        <li>Switch to <b>Narrow</b>. Style A falls back to the badge when the tabs don't fit.</li>
+        <li>Open <code>zsh</code> in the api stack, then press <b>Block a background agent</b>. The hidden claude tab turns amber, and so does the <code>api</code> tab.</li>
+        <li>Click the mockup, then use <kbd>[</kbd> <kbd>]</kbd> to cycle, <kbd>1</kbd>–<kbd>9</kbd> to jump, <kbd>t</kbd> to add, <kbd>x</kbd> to close, <kbd>←</kbd> <kbd>→</kbd> to move focus. In herdr these come after the prefix key.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const span = (c, s) => `<span class="${c}">${s}</span>`;
+  const kw = s => span('c-purple', s), ty = s => span('c-yellow', s), fn = s => span('c-blue', s), str = s => span('c-green', s);
+  const cursor = '<span class="cur"> </span>';
+  const STATUS = {
+    working: { g: '●', c: 'ok', t: 'Working' },
+    blocked: { g: '◐', c: 'warn', t: 'Needs you' },
+    done: { g: '✓', c: 'done', t: 'Done' },
+    idle: { g: '', c: '', t: 'Idle' },
+  };
+  const RANK = { idle: 0, working: 1, done: 2, blocked: 3 };
+  const dot = st => STATUS[st].g ? `<span class="dot ${STATUS[st].c}" title="${STATUS[st].t}">${STATUS[st].g}</span>` : '';
+  const worst = ids => ids.reduce((w, id) => RANK[S.panes[id].status] > RANK[w] ? S.panes[id].status : w, 'idle');
+
+  const API_CODE = [
+    `${kw('use')} axum::{extract::${ty('State')}, http::${ty('StatusCode')}};`,
+    `${kw('use')} crate::auth::${ty('RateLimiter')};`,
+    ``,
+    `${kw('pub async fn')} ${fn('require_auth')}(`,
+    `    ${ty('State')}(limiter): ${ty('State')}&lt;${ty('RateLimiter')}&gt;,`,
+    `    req: ${ty('Request')},`,
+    `    next: ${ty('Next')},`,
+    `) -&gt; ${ty('Result')}&lt;${ty('Response')}, ${ty('StatusCode')}&gt; {`,
+    `    limiter.${fn('check')}(&amp;req).${kw('await')}?;`,
+    `    next.${fn('run')}(req).${kw('await')}`,
+    `}`,
+  ];
+  const WEB_CODE = [
+    `${kw('import')} { ${fn('useUser')} } ${kw('from')} ${str('"@/auth"')};`,
+    ``,
+    `${kw('export function')} ${fn('Settings')}() {`,
+    `  ${kw('const')} user = ${fn('useUser')}();`,
+    `  ${kw('if')} (!user) ${kw('return')} ${kw('null')};`,
+    `  ${kw('return')} &lt;${ty('SettingsForm')} user={user} /&gt;;`,
+    `}`,
+  ];
+
+  function seed() {
+    return {
+      cur: 0, menu: null, msg: '', compact: new Set(), drag: null,
+      panes: {
+        1: { id: 1, name: 'nvim', kind: 'nvim', status: 'idle', file: 'src/auth/middleware.rs', code: API_CODE, pos: '9:5' },
+        2: { id: 2, name: 'claude', kind: 'claude', status: 'working', task: 'add rate limiting to the auth middleware', file: 'src/auth/middleware.rs', doing: 'Implementing token bucket…', result: 'Rate limiting is in place. 12 tests pass.' },
+        3: { id: 3, name: 'codex', kind: 'codex', status: 'blocked', task: 'run the api integration tests', cmd: 'cargo test -p api --test integration' },
+        4: { id: 4, name: 'zsh', kind: 'zsh', status: 'idle', cwd: '~/git/api', hist: ['cargo watch -x check', span('c-dim', '[Running \'cargo check\']'), span('c-green', '    Finished') + ' `dev` profile in 1.92s'] },
+        5: { id: 5, name: 'nvim', kind: 'nvim', status: 'idle', file: 'src/routes/settings.tsx', code: WEB_CODE, pos: '5:12' },
+        6: { id: 6, name: 'claude', kind: 'claude', status: 'done', task: 'fix the hydration warning on /settings', file: 'src/routes/settings.tsx', doing: 'Tracing hydration mismatch…', result: 'Fixed. The warning came from a client-only date.' },
+        7: { id: 7, name: 'vite', kind: 'server', status: 'idle', cwd: '~/git/web' },
+        8: { id: 8, name: 'zsh', kind: 'zsh', status: 'idle', cwd: '~/git/infra', hist: ['kubectl get pods -n api', span('c-dim', 'NAME                    READY   STATUS'), 'api-7d9f8c6b5-2xkqp     1/1     Running', 'api-7d9f8c6b5-8hd4m     1/1     Running', 'redis-0                 1/1     Running'] },
+      },
+      tabs: [
+        { name: 'api', cwd: '~/git/api', focus: 'L2', leaves: [{ id: 'L1', members: [1], active: 0, flex: 0.8 }, { id: 'L2', members: [2, 3, 4], active: 0, flex: 1.2 }] },
+        { name: 'web', cwd: '~/git/web', focus: 'L4', leaves: [{ id: 'L3', members: [5], active: 0, flex: 1 }, { id: 'L4', members: [6, 7], active: 0, flex: 1 }] },
+        { name: 'infra', cwd: '~/git/infra', focus: 'L5', leaves: [{ id: 'L5', members: [8], active: 0, flex: 1 }] },
+      ],
+    };
+  }
+  let S = seed();
+  let uid = 100;
+  let style = 'A', width = 'wide';
+  try { const v = localStorage.getItem('herdr-subpane-style'); if (v && 'ABCD'.includes(v)) style = v; } catch (e) {}
+
+  const tab = () => S.tabs[S.cur];
+  const leafById = id => tab().leaves.find(l => l.id === id);
+
+  // ---------- pane contents ----------
+  const approveBtn = (id, label) => `<button class="approve" data-act="approve" data-pane="${id}">${label}</button>`;
+  const prompt = p => `${span('c-blue', p.cwd)} ${span('c-purple', 'main')} ${span('c-green', '❯')} `;
+  const KIND = {
+    nvim(p) {
+      const lines = p.code.map((l, i) => span('c-dim', String(i + 1).padStart(3) + ' ') + l);
+      for (let i = 0; i < 12; i++) lines.push(span('c-dim', '  ~'));
+      lines.push(span('nv-mode', ' NORMAL ') + ' ' + p.file + '  ' + span('c-dim', p.pos));
+      return lines.join('\n');
+    },
+    claude(p) {
+      const L = [span('c-dim', '> ') + p.task, '', '⏺ Read(' + span('c-dim', p.file) + ')', '⏺ Update(' + span('c-dim', p.file) + ')', span('c-dim', '  ⎿  Added 24 lines, removed 3 lines'), ''];
+      if (p.status === 'working') L.push(span('c-orange', '✻ ' + p.doing) + span('c-dim', ' (38s · esc to interrupt)'));
+      else if (p.status === 'blocked') L.push(span('c-yellow', 'Edit src/auth/limits.rs?'), approveBtn(p.id, '❯ 1. Yes'), span('c-dim', '  2. Yes, allow all edits this session'), span('c-dim', '  3. No, and tell Claude what to do'));
+      else if (p.status === 'done') L.push('⏺ ' + p.result, '', span('c-dim', '> ') + cursor);
+      else L.push(span('c-dim', '> ') + cursor);
+      return L.join('\n');
+    },
+    codex(p) {
+      const L = [span('c-dim', '▌ ') + p.task, '', '• Running ' + span('c-bright', p.cmd)];
+      if (p.status === 'blocked') L.push('', span('c-yellow', '  Allow command?'), '  ' + approveBtn(p.id, '› 1. Yes, run it'), span('c-dim', '    2. Yes, and don\'t ask again'), span('c-dim', '    3. No, tell Codex what to do'));
+      else if (p.status === 'working') L.push(span('c-dim', '  └ 41 passed; 0 failed; 3 running'), '', span('c-orange', '• Working') + span('c-dim', ' (12s · esc to interrupt)'));
+      else if (p.status === 'done') L.push(span('c-dim', '  └ 44 passed; 0 failed'), '', '• All integration tests pass.', '', span('c-dim', '▌ ') + cursor);
+      else L.push('', span('c-dim', '▌ ') + cursor);
+      return L.join('\n');
+    },
+    zsh(p) {
+      const L = [];
+      if (p.hist.length) { L.push(prompt(p) + p.hist[0]); L.push(...p.hist.slice(1)); }
+      L.push(prompt(p) + cursor);
+      return L.join('\n');
+    },
+    server(p) {
+      return [prompt(p) + 'pnpm dev', '', '  ' + span('c-green', 'VITE v5.4.2') + span('c-dim', '  ready in 312 ms'), '', '  ' + span('c-green', '➜') + '  Local:   ' + span('c-blue', 'http://localhost:5173/'), '  ' + span('c-dim', '➜  Network: use --host to expose'), '', span('c-dim', '10:42:17') + ' ' + span('c-blue', '[vite]') + ' hmr update /src/routes/settings.tsx'].join('\n');
+    },
+  };
+  const content = id => `<pre class="out">${KIND[S.panes[id].kind](S.panes[id])}</pre>`;
+
+  // ---------- rendering ----------
+  function leafHTML(l) {
+    const t = tab();
+    const focused = t.focus === l.id;
+    const multi = l.members.length > 1;
+    const mode = !multi ? 'P' : (style === 'A' && S.compact.has(l.id)) ? 'D' : style;
+    const actId = l.members[l.active];
+    const ap = S.panes[actId];
+    const name = id => S.panes[id].name;
+    let head = '', body = '', extra = '';
+    const close = i => `<button class="x" data-act="close" data-i="${i}" aria-label="Close ${name(l.members[i])}">×</button>`;
+
+    if (mode === 'P') {
+      head = `<span class="ttl" draggable="true" data-drag="${actId}">${ap.name} ${dot(ap.status)}</span><button class="add" data-act="add" title="Add a subpane">+</button>`;
+      body = content(actId);
+    } else if (mode === 'A') {
+      head = l.members.map((id, i) => `<span class="st${i === l.active ? ' on' : ''}" draggable="true" data-drag="${id}" data-act="activate" data-i="${i}" role="tab" aria-selected="${i === l.active}">${name(id)}${dot(S.panes[id].status)}${close(i)}</span>`).join('') + `<button class="add" data-act="add" title="Add a subpane">+</button>`;
+      body = content(actId);
+    } else if (mode === 'D') {
+      const hidden = worst(l.members.filter((_, i) => i !== l.active));
+      head = `<span class="ttl" draggable="true" data-drag="${actId}">${ap.name} ${dot(ap.status)}</span>`;
+      const why = S.compact.has(l.id) ? 'Tabs did not fit, so this shows a badge. ' : '';
+      extra = `<button class="badge" data-act="menu" title="${why}Show all subpanes" aria-expanded="${S.menu === l.id}">[${l.active + 1}/${l.members.length}${hidden !== 'idle' ? ' ' + dot(hidden) : ''}]</button>`;
+      if (S.menu === l.id) {
+        extra += `<div class="menu" role="menu">` + l.members.map((id, i) => `<div class="mi${i === l.active ? ' on' : ''}"><button data-act="activate" data-i="${i}" role="menuitem">${i + 1} ${name(id)} ${dot(S.panes[id].status)}</button>${close(i)}</div>`).join('') + `<button class="mi-add" data-act="add">+ New subpane</button></div>`;
+      }
+      body = content(actId);
+    } else if (mode === 'B') {
+      const strip = i => `<button class="strip" data-act="activate" data-i="${i}" draggable="true" data-drag="${l.members[i]}">▸ ${name(l.members[i])} ${dot(S.panes[l.members[i]].status)}<span class="fill"></span></button>`;
+      const before = l.members.slice(0, l.active).map((_, i) => strip(i)).join('');
+      const after = l.members.slice(l.active + 1).map((_, k) => strip(l.active + 1 + k)).join('');
+      body = before + `<div class="act-h" draggable="true" data-drag="${actId}">▾ ${ap.name} ${dot(ap.status)}<span class="fill"></span>${close(l.active)}<button class="add" data-act="add" title="Add a subpane">+</button></div>` + content(actId) + after;
+    } else if (mode === 'C') {
+      head = `<span class="ttl" draggable="true" data-drag="${actId}">${ap.name} ${dot(ap.status)}</span>`;
+      const rail = l.members.map((id, i) => `<button class="ri${i === l.active ? ' on' : ''}" data-act="activate" data-i="${i}" draggable="true" data-drag="${id}"><span>${name(id)}</span>${dot(S.panes[id].status)}</button>`).join('');
+      body = `<div class="rail">${rail}<button class="add" data-act="add">+ new</button></div><div class="pane-c">${content(actId)}</div>`;
+    }
+    return `<section class="leaf${focused ? ' focus' : ''}" data-leaf="${l.id}" data-mode="${mode}" style="flex:${l.flex}">${head ? `<header class="lhead">${head}</header>` : ''}${extra}<div class="lbody">${body}</div></section>`;
+  }
+
+  function allIds(t) { return t.leaves.flatMap(l => l.members); }
+
+  function draw() {
+    const term = document.getElementById('term');
+    term.style.width = width === 'wide' ? '1060px' : '640px';
+    const panesAll = S.tabs.flatMap(allIds);
+    document.getElementById('ws').innerHTML =
+      `<div class="ws-h">WORKSPACES</div>` +
+      `<div class="ws-item on"><div class="row"><span>herdr</span>${dot(worst(panesAll))}</div><small>${S.tabs.length} tabs · ${panesAll.length} panes</small></div>` +
+      `<div class="ws-item"><div class="row"><span>blog</span>${dot('done')}</div><small>1 tab · 2 panes</small></div>` +
+      `<div class="ws-item"><div class="row"><span>dotfiles</span></div><small>1 tab · 1 pane</small></div>`;
+    document.getElementById('tabbar').innerHTML = S.tabs.map((t, i) =>
+      `<button class="tb${i === S.cur ? ' on' : ''}" data-act="tab" data-i="${i}">${i + 1} ${t.name} ${dot(worst(allIds(t)))}</button>`).join('');
+    document.getElementById('layout').innerHTML = tab().leaves.map(leafHTML).join('');
+    const names = { A: 'tab strip', B: 'stacked', C: 'side rail', D: 'badge' };
+    document.getElementById('sbar').innerHTML =
+      `<span>herdr · ${tab().name}</span>` +
+      (S.msg ? `<span class="msg">${S.msg}</span>` : `<span>prefix [ ] cycle · t new · x close · ←→ focus · drag a tab to merge or split</span>`) +
+      `<span>${names[style]}</span>`;
+  }
+
+  function render() {
+    S.compact.clear();
+    draw();
+    if (style === 'A') {
+      let again = false;
+      document.querySelectorAll('.leaf[data-mode="A"] .lhead').forEach(h => {
+        if (h.scrollWidth > h.clientWidth + 1) { S.compact.add(h.closest('.leaf').dataset.leaf); again = true; }
+      });
+      if (again) draw();
+    }
+    drawTree();
+    document.querySelectorAll('#style-seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.style === style));
+    document.querySelectorAll('#w-seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.width === width));
+  }
+
+  function drawTree() {
+    const t = tab();
+    const out = [`Tab "${t.name}"`];
+    const paneLabel = id => {
+      const p = S.panes[id];
+      const st = STATUS[p.status];
+      return `Pane(${id}) ${p.name}${st.g ? ' <span class="' + st.c + '">' + st.g + '</span>' : ''}`;
+    };
+    const focusMark = l => t.focus === l.id ? '  <span class="dim">← focus</span>' : '';
+    function emit(label, prefix, last) { out.push(prefix + (last ? '└─ ' : '├─ ') + label); return prefix + (last ? '   ' : '│  '); }
+    function leaf(l, prefix, last) {
+      if (l.members.length === 1) { emit(paneLabel(l.members[0]) + focusMark(l), prefix, last); return; }
+      const p2 = emit(`<span class="stack">Stack</span> <span class="dim">active=${l.active}</span>${focusMark(l)}`, prefix, last);
+      l.members.forEach((id, i) => emit((i === l.active ? '▸ ' : '  ') + paneLabel(id), p2, i === l.members.length - 1));
+    }
+    function node(leaves, prefix, last) {
+      if (leaves.length === 1) { leaf(leaves[0], prefix, last); return; }
+      const total = leaves.reduce((s, l) => s + l.flex, 0);
+      const p2 = emit(`Split(H) <span class="dim">ratio=${(leaves[0].flex / total).toFixed(2)}</span>`, prefix, last);
+      leaf(leaves[0], p2, false);
+      node(leaves.slice(1), p2, true);
+    }
+    node(t.leaves, '', true);
+    document.getElementById('tree').innerHTML = out.join('\n');
+  }
+
+  // ---------- operations ----------
+  function newPane(cwd) {
+    const id = uid++;
+    S.panes[id] = { id, name: 'zsh', kind: 'zsh', status: 'idle', cwd, hist: [] };
+    return id;
+  }
+  function detach(l, i) {
+    const id = l.members[i];
+    l.members.splice(i, 1);
+    if (i < l.active || l.active >= l.members.length) l.active = Math.max(0, l.active - (i < l.active ? 1 : 0));
+    if (l.active >= l.members.length) l.active = Math.max(0, l.members.length - 1);
+    return id;
+  }
+  function removeLeaf(l) {
+    const t = tab();
+    const k = t.leaves.indexOf(l);
+    t.leaves.splice(k, 1);
+    if (!t.leaves.length) {
+      t.leaves.push({ id: 'L' + uid++, members: [newPane(t.cwd)], active: 0, flex: 1 });
+    } else {
+      t.leaves[Math.max(0, k - 1)].flex += l.flex;
+    }
+    if (t.focus === l.id) t.focus = t.leaves[Math.min(k, t.leaves.length - 1)].id;
+  }
+  function closeMember(l, i) {
+    const id = detach(l, i);
+    delete S.panes[id];
+    if (!l.members.length) removeLeaf(l);
+  }
+  function addMember(l) {
+    l.members.push(newPane(tab().cwd));
+    l.active = l.members.length - 1;
+  }
+  function move(paneId, fromId, toId, zone) {
+    const t = tab();
+    const from = leafById(fromId);
+    detach(from, from.members.indexOf(paneId));
+    const to = leafById(toId);
+    if (!from.members.length) removeLeaf(from);
+    if (zone === 'merge') {
+      to.members.push(paneId);
+      to.active = to.members.length - 1;
+      t.focus = to.id;
+    } else {
+      const half = to.flex / 2;
+      to.flex = half;
+      const nl = { id: 'L' + uid++, members: [paneId], active: 0, flex: half };
+      const k = t.leaves.indexOf(to);
+      t.leaves.splice(zone === 'left' ? k : k + 1, 0, nl);
+      t.focus = nl.id;
+    }
+  }
+  function approve(id) {
+    const p = S.panes[id];
+    if (!p) return;
+    p.status = 'working';
+    setTimeout(() => { if (S.panes[id] === p) { p.status = 'done'; render(); } }, 6000);
+  }
+  let msgTimer;
+  function flash(m) {
+    S.msg = m;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => { S.msg = ''; render(); }, 4000);
+  }
+
+  // ---------- events ----------
+  const term = document.getElementById('term');
+  term.addEventListener('click', e => {
+    const leafEl = e.target.closest('.leaf');
+    const a = e.target.closest('[data-act]');
+    const t = tab();
+    if (leafEl) t.focus = leafEl.dataset.leaf;
+    const l = leafEl && leafById(leafEl.dataset.leaf);
+    const act = a && a.dataset.act;
+    if (act !== 'menu') S.menu = null;
+    switch (act) {
+      case 'tab': S.cur = +a.dataset.i; break;
+      case 'activate': l.active = +a.dataset.i; break;
+      case 'close': closeMember(l, +a.dataset.i); break;
+      case 'add': addMember(l); break;
+      case 'menu': S.menu = S.menu === l.id ? null : l.id; break;
+      case 'approve': approve(+a.dataset.pane); break;
+    }
+    render();
+  });
+  term.addEventListener('mousedown', e => { if (e.button === 1 && e.target.closest('.st, .strip, .ri')) e.preventDefault(); });
+  term.addEventListener('auxclick', e => {
+    if (e.button !== 1) return;
+    const a = e.target.closest('.st, .strip, .ri');
+    if (!a) return;
+    e.preventDefault();
+    closeMember(leafById(a.closest('.leaf').dataset.leaf), +a.dataset.i);
+    render();
+  });
+  term.addEventListener('keydown', e => {
+    const t = tab();
+    const l = leafById(t.focus);
+    if (!l) return;
+    const k = e.key;
+    let hit = true;
+    if (k === ']') l.active = (l.active + 1) % l.members.length;
+    else if (k === '[') l.active = (l.active - 1 + l.members.length) % l.members.length;
+    else if (k === 't') addMember(l);
+    else if (k === 'x') closeMember(l, l.active);
+    else if (/^[1-9]$/.test(k) && +k <= l.members.length) l.active = +k - 1;
+    else if (k === 'ArrowLeft' || k === 'ArrowRight') {
+      const i = t.leaves.indexOf(l) + (k === 'ArrowLeft' ? -1 : 1);
+      if (t.leaves[i]) t.focus = t.leaves[i].id;
+    } else if (k === 'Escape') S.menu = null;
+    else hit = false;
+    if (hit) { e.preventDefault(); render(); }
+  });
+
+  // drag & drop
+  const clearDrop = () => term.querySelectorAll('.leaf[data-drop]').forEach(el => delete el.dataset.drop);
+  function zoneFor(e, leafEl) {
+    const r = leafEl.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width;
+    const zone = x < 0.22 ? 'left' : x > 0.78 ? 'right' : 'merge';
+    if (leafEl.dataset.leaf === S.drag.from) {
+      const from = leafById(S.drag.from);
+      if (from.members.length === 1 || zone === 'merge') return null;
+    }
+    return zone;
+  }
+  term.addEventListener('dragstart', e => {
+    const d = e.target.closest('[data-drag]');
+    if (!d) return;
+    S.drag = { pane: +d.dataset.drag, from: d.closest('.leaf').dataset.leaf };
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', d.dataset.drag);
+  });
+  term.addEventListener('dragover', e => {
+    if (!S.drag) return;
+    const leafEl = e.target.closest('.leaf');
+    clearDrop();
+    if (!leafEl) return;
+    const zone = zoneFor(e, leafEl);
+    if (!zone) return;
+    e.preventDefault();
+    leafEl.dataset.drop = zone;
+  });
+  term.addEventListener('drop', e => {
+    const leafEl = e.target.closest('.leaf');
+    if (!S.drag || !leafEl) return;
+    const zone = zoneFor(e, leafEl);
+    e.preventDefault();
+    if (zone) move(S.drag.pane, S.drag.from, leafEl.dataset.leaf, zone);
+    S.drag = null;
+    clearDrop();
+    render();
+  });
+  term.addEventListener('dragend', () => { S.drag = null; clearDrop(); });
+
+  // controls
+  document.getElementById('style-seg').addEventListener('click', e => {
+    const b = e.target.closest('[data-style]');
+    if (!b) return;
+    style = b.dataset.style; S.menu = null;
+    try { localStorage.setItem('herdr-subpane-style', style); } catch (err) {}
+    render();
+  });
+  document.getElementById('w-seg').addEventListener('click', e => {
+    const b = e.target.closest('[data-width]');
+    if (!b) return;
+    width = b.dataset.width;
+    render();
+  });
+  document.getElementById('b-tear').addEventListener('click', () => {
+    const l = leafById(tab().focus);
+    if (!l || l.members.length < 2) { flash('Focus a pane with 2 or more subpanes first.'); render(); return; }
+    move(l.members[l.active], l.id, l.id, 'right');
+    render();
+  });
+  document.getElementById('b-merge').addEventListener('click', () => {
+    const t = tab();
+    const l = leafById(t.focus);
+    const k = t.leaves.indexOf(l);
+    const target = t.leaves[k + 1] || t.leaves[k - 1];
+    if (!target) { flash('There is no neighboring pane to merge into.'); render(); return; }
+    move(l.members[l.active], l.id, target.id, 'merge');
+    render();
+  });
+  document.getElementById('b-block').addEventListener('click', () => {
+    const t = tab();
+    const hidden = [];
+    t.leaves.forEach(l => l.members.forEach((id, i) => {
+      const p = S.panes[id];
+      if (i !== l.active && (p.kind === 'claude' || p.kind === 'codex') && p.status !== 'blocked') hidden.push(id);
+    }));
+    if (!hidden.length) { flash('No hidden agent here. Switch a stack to another subpane first.'); render(); return; }
+    S.panes[hidden[0]].status = 'blocked';
+    flash(`${S.panes[hidden[0]].name} needs you. Its tab and the "${t.name}" tab turned amber.`);
+    render();
+  });
+  document.getElementById('b-reset').addEventListener('click', () => { S = seed(); uid = 100; render(); });
+
+  render();
+})();
+</script>

@@ -43,6 +43,8 @@ pub struct Tab {
     pub layout: TileLayout,
     /// Pane viewport state — always present, testable without PTYs.
     pub panes: HashMap<PaneId, PaneState>,
+    /// Slots holding several terminals; hidden members live only in `panes`.
+    pub subpanes: super::stack::SubpaneStacks,
     #[cfg(test)]
     pub runtimes: HashMap<PaneId, TerminalRuntime>,
     pub zoomed: bool,
@@ -185,6 +187,7 @@ impl Tab {
                 root_pane: root_id,
                 layout,
                 panes,
+                subpanes: Default::default(),
                 #[cfg(test)]
                 runtimes: HashMap::new(),
                 zoomed: false,
@@ -448,6 +451,7 @@ impl Tab {
             root_pane: pane_id,
             layout: TileLayout::from_saved(Node::Pane(pane_id), pane_id),
             panes,
+            subpanes: Default::default(),
             #[cfg(test)]
             runtimes: HashMap::new(),
             zoomed: false,
@@ -460,6 +464,12 @@ impl Tab {
     pub(crate) fn take_pane_for_move(&mut self, pane_id: PaneId) -> Option<MovedPane> {
         if !self.panes.contains_key(&pane_id) {
             return None;
+        }
+        if let Some(pane_state) = self.take_subpane_member(pane_id) {
+            return Some(MovedPane {
+                pane_id,
+                pane_state,
+            });
         }
 
         if self.layout.pane_count() > 1 {
@@ -499,6 +509,9 @@ impl Tab {
     }
 
     fn detach_pane(&mut self, pane_id: PaneId) -> Option<DetachedPane> {
+        if let Some(pane) = self.take_subpane_member(pane_id) {
+            return Some((pane_id, pane.attached_terminal_id));
+        }
         if self.layout.pane_count() <= 1 {
             return None;
         }

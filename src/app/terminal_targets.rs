@@ -137,8 +137,7 @@ impl App {
             .enumerate()
             .flat_map(|(ws_idx, ws)| {
                 ws.tabs.iter().enumerate().flat_map(move |(tab_idx, tab)| {
-                    tab.layout
-                        .pane_ids()
+                    tab.pane_ids_with_subpanes()
                         .into_iter()
                         .filter_map(move |pane_id| {
                             tab.terminal_id(pane_id).map(|terminal_id| TerminalTarget {

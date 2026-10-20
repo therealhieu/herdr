@@ -274,6 +274,7 @@ impl ClientShellState {
                 pixel_height: pane.pixel_height,
             })
             .collect();
+        self.hits.subpane_strips = super::subpanes::strip_hits(snapshot, &self.hits.panes);
         let topology_signature = pane_surface_topology_signature(surface);
         self.hits.pane_splits = surface
             .splits

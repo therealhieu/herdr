@@ -531,6 +531,30 @@ pub struct PaneInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scroll: Option<PaneScrollInfo>,
     pub revision: u64,
+    /// Set when the pane is one of several terminals sharing one pane slot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subpane: Option<PaneSubpaneInfo>,
+}
+
+/// A pane's place in a pane slot that holds several terminals.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PaneSubpaneInfo {
+    /// The member currently shown in the slot.
+    pub visible_pane_id: String,
+    /// Zero-based position of this pane among the slot's members.
+    pub index: u32,
+    pub count: u32,
+    pub label: String,
+}
+
+/// Start a shell as a new member of the pane slot holding `pane_id` and show it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PaneSubpaneCreateParams {
+    pub pane_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    #[serde(default = "super::default_true")]
+    pub focus: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]

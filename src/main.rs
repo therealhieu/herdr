@@ -53,6 +53,7 @@ mod selection;
 mod server;
 mod session;
 mod sound;
+mod subpane_strip;
 mod terminal;
 mod terminal_effects;
 mod terminal_modes;
@@ -187,6 +188,10 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # split_horizontal = "prefix+minus"
 # close_pane = "prefix+x"
 # zoom = "prefix+z"       # legacy alias: fullscreen
+# new_subpane = "prefix+t"           # new terminal in the focused pane slot
+# next_subpane = "prefix+period"
+# previous_subpane = "prefix+comma"
+# subpane = ""            # optional indexed binding, e.g. "prefix+alt+1..9"
 # resize_mode = "prefix+r"
 # resize_pane_left = ""   # optional, e.g. "ctrl+shift+alt+left" resizes without entering resize mode
 # resize_pane_down = ""   # optional, e.g. "ctrl+shift+alt+down"

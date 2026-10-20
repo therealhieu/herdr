@@ -181,6 +181,7 @@ mod tests {
             "agent.prompt",
             "agent.send_keys",
             "pane.split",
+            "pane.subpane.create",
             "pane.swap",
             "pane.move",
             "pane.zoom",

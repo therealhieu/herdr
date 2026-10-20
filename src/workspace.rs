@@ -17,6 +17,7 @@ use crate::terminal::{TerminalId, TerminalRuntime, TerminalRuntimeRegistry, Term
 
 mod aggregate;
 mod git;
+pub(crate) mod stack;
 mod tab;
 
 use self::git::git_status_cache_key_for_space;
@@ -452,7 +453,7 @@ impl Workspace {
         if idx < self.tabs.len() {
             self.active_tab = idx;
             if let Some(tab) = self.tabs.get_mut(idx) {
-                for pane in tab.panes.values_mut() {
+                for pane in tab.visible_panes_mut() {
                     pane.seen = true;
                 }
             }
@@ -854,7 +855,10 @@ impl Workspace {
             .map(|tab| tab.layout.pane_count())
             .unwrap_or(0);
         let tab_count = self.tabs.len();
-        if pane_count <= 1 {
+        let focused_in_stack = self
+            .active_tab()
+            .is_some_and(|tab| tab.subpanes.contains(tab.layout.focused()));
+        if pane_count <= 1 && !focused_in_stack {
             return tab_count <= 1 || self.close_active_tab_and_report();
         }
 
@@ -872,7 +876,7 @@ impl Workspace {
         };
         let pane_count = self.tabs[tab_idx].layout.pane_count();
         let tab_count = self.tabs.len();
-        if pane_count <= 1 {
+        if pane_count <= 1 && !self.tabs[tab_idx].subpanes.contains(pane_id) {
             if tab_count <= 1 {
                 return true;
             }
@@ -895,7 +899,7 @@ impl Workspace {
     pub(crate) fn take_pane_for_move(&mut self, pane_id: PaneId) -> Option<TakenPane> {
         let tab_idx = self.find_tab_index_for_pane(pane_id)?;
         let pane_count = self.tabs[tab_idx].layout.pane_count();
-        if pane_count <= 1 {
+        if pane_count <= 1 && !self.tabs[tab_idx].subpanes.contains(pane_id) {
             let mut tab = self.tabs.remove(tab_idx);
             let moved = tab.take_pane_for_move(pane_id)?;
             self.adjust_active_tab_after_removal(tab_idx);
@@ -1115,7 +1119,7 @@ impl Workspace {
         };
         let pane_count = self.tabs[tab_idx].layout.pane_count();
         let tab_count = self.tabs.len();
-        if pane_count <= 1 {
+        if pane_count <= 1 && !self.tabs[tab_idx].subpanes.contains(pane_id) {
             if tab_count <= 1 {
                 return true;
             }
@@ -1182,6 +1186,7 @@ impl Workspace {
             root_pane: root_id,
             layout,
             panes,
+            subpanes: Default::default(),
             runtimes: HashMap::new(),
             zoomed: false,
             events,
@@ -1238,6 +1243,7 @@ impl Workspace {
             root_pane: root_id,
             layout,
             panes,
+            subpanes: Default::default(),
             runtimes: HashMap::new(),
             zoomed: false,
             events,
@@ -1257,6 +1263,9 @@ impl Workspace {
         assert!(!ws.close_pane(removed_pane));
         let _unused_raw_id = PaneId::alloc();
         let later_pane = ws.test_split(Direction::Horizontal);
+        // A hidden subpane member keeps layout ids distinct from tab panes.
+        ws.test_add_subpane(later_pane);
+        assert!(ws.tabs[0].activate_subpane(later_pane));
 
         let removed_tab = ws.test_add_tab(Some("removed"));
         let survivor_tab = ws.test_add_tab(None);
@@ -1343,9 +1352,11 @@ impl Workspace {
             );
             let pane_set: std::collections::HashSet<_> = tab.panes.keys().copied().collect();
             assert_eq!(
-                layout_set, pane_set,
+                tab.subpanes.assert_invariants_for_test(&layout_panes),
+                pane_set,
                 "workspace {} tab {} layout panes must exactly match pane states",
-                self.id, tab_idx
+                self.id,
+                tab_idx
             );
 
             for (pane_id, pane) in &tab.panes {

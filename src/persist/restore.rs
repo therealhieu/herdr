@@ -15,8 +15,8 @@ use crate::terminal::{TerminalId, TerminalRuntime, TerminalState};
 use crate::workspace::Workspace;
 
 use super::snapshot::{
-    PaneAgentResumeSnapshot, PaneAgentSessionSnapshot, PaneHistorySnapshot, TabHistorySnapshot,
-    WorkspaceHistorySnapshot,
+    PaneAgentResumeSnapshot, PaneAgentSessionSnapshot, PaneHistorySnapshot, SubpaneStackSnapshot,
+    TabHistorySnapshot, WorkspaceHistorySnapshot,
 };
 use super::{
     DirectionSnapshot, LayoutSnapshot, SessionHistorySnapshot, SessionSnapshot, TabSnapshot,
@@ -126,8 +126,8 @@ pub fn handoff_pane_aliases(
     let mut aliases = HashMap::new();
     for (ws_snap, workspace) in snapshot.workspaces.iter().zip(workspaces) {
         for (tab_snap, tab) in ws_snap.tabs.iter().zip(&workspace.tabs) {
-            let old_ids = collect_snapshot_pane_ids(&tab_snap.layout);
-            let new_ids = tab.layout.pane_ids();
+            let old_ids = snapshot_pane_ids_with_subpanes(tab_snap);
+            let new_ids = tab.pane_ids_with_subpanes();
             for (old_id, new_id) in old_ids.into_iter().zip(new_ids) {
                 if old_id != new_id.raw() {
                     aliases.insert(old_id, new_id);
@@ -138,33 +138,13 @@ pub fn handoff_pane_aliases(
     aliases
 }
 
-#[cfg(unix)]
-fn collect_snapshot_pane_ids(node: &LayoutSnapshot) -> Vec<u32> {
-    let mut ids = Vec::new();
-    collect_snapshot_ids_inner(node, &mut ids);
-    ids
-}
-
-#[cfg(unix)]
-fn collect_snapshot_ids_inner(node: &LayoutSnapshot, ids: &mut Vec<u32>) {
-    match node {
-        LayoutSnapshot::Pane(id) => ids.push(*id),
-        LayoutSnapshot::Split { first, second, .. } => {
-            collect_snapshot_ids_inner(first, ids);
-            collect_snapshot_ids_inner(second, ids);
-        }
-    }
-}
-
 fn migrated_public_pane_numbers_by_old_raw(
     snap: &WorkspaceSnapshot,
     next_public_pane_number: &mut usize,
 ) -> HashMap<u32, usize> {
     let mut public_numbers = snap.public_pane_numbers.clone();
     for tab in &snap.tabs {
-        let mut pane_ids = Vec::new();
-        collect_layout_snapshot_pane_ids(&tab.layout, &mut pane_ids);
-        for old_raw in pane_ids {
+        for old_raw in snapshot_pane_ids_with_subpanes(tab) {
             public_numbers.entry(old_raw).or_insert_with(|| {
                 let number = *next_public_pane_number;
                 *next_public_pane_number += 1;
@@ -181,6 +161,193 @@ fn collect_layout_snapshot_pane_ids(node: &LayoutSnapshot, ids: &mut Vec<u32>) {
         LayoutSnapshot::Split { first, second, .. } => {
             collect_layout_snapshot_pane_ids(first, ids);
             collect_layout_snapshot_pane_ids(second, ids);
+        }
+    }
+}
+
+/// Saved pane ids in layout order, each stack leaf followed by its hidden
+/// members. Matches `Tab::pane_ids_with_subpanes` after a full restore.
+fn snapshot_pane_ids_with_subpanes(tab: &TabSnapshot) -> Vec<u32> {
+    let mut layout_ids = Vec::new();
+    collect_layout_snapshot_pane_ids(&tab.layout, &mut layout_ids);
+    let stacks: Vec<_> = validated_subpane_stacks(tab, &layout_ids)
+        .into_iter()
+        .filter_map(|(stack, validity)| validity.is_ok().then_some(stack))
+        .collect();
+    let mut ids = Vec::with_capacity(tab.panes.len());
+    for leaf in layout_ids {
+        ids.push(leaf);
+        if let Some(stack) = stacks
+            .iter()
+            .find(|stack| stack.members[stack.active] == leaf)
+        {
+            ids.extend(
+                stack
+                    .members
+                    .iter()
+                    .enumerate()
+                    .filter(|(idx, _)| *idx != stack.active)
+                    .map(|(_, id)| *id),
+            );
+        }
+    }
+    ids
+}
+
+/// Check each saved stack against the saved layout and panes. A stack is
+/// valid when it has at least two unique members that all have saved panes,
+/// its active member is a layout leaf, its other members are not, and no
+/// member belongs to an earlier valid stack.
+fn validated_subpane_stacks<'a>(
+    tab: &'a TabSnapshot,
+    layout_ids: &[u32],
+) -> Vec<(&'a SubpaneStackSnapshot, Result<(), &'static str>)> {
+    let layout_ids: HashSet<u32> = layout_ids.iter().copied().collect();
+    let mut claimed = HashSet::new();
+    tab.subpanes
+        .iter()
+        .map(|stack| {
+            let validity = validate_subpane_stack(stack, tab, &layout_ids, &claimed);
+            if validity.is_ok() {
+                claimed.extend(stack.members.iter().copied());
+            }
+            (stack, validity)
+        })
+        .collect()
+}
+
+fn validate_subpane_stack(
+    stack: &SubpaneStackSnapshot,
+    tab: &TabSnapshot,
+    layout_ids: &HashSet<u32>,
+    claimed: &HashSet<u32>,
+) -> Result<(), &'static str> {
+    if stack.members.len() < 2 {
+        return Err("fewer than two members");
+    }
+    if stack.active >= stack.members.len() {
+        return Err("active member out of range");
+    }
+    let unique: HashSet<u32> = stack.members.iter().copied().collect();
+    if unique.len() != stack.members.len() {
+        return Err("duplicate member");
+    }
+    if stack.members.iter().any(|id| claimed.contains(id)) {
+        return Err("member already belongs to another stack");
+    }
+    if stack.members.iter().any(|id| !tab.panes.contains_key(id)) {
+        return Err("member has no saved pane");
+    }
+    let leaves_match_active = stack
+        .members
+        .iter()
+        .enumerate()
+        .all(|(idx, id)| layout_ids.contains(id) == (idx == stack.active));
+    if !leaves_match_active {
+        return Err("only the active member may be a layout leaf");
+    }
+    Ok(())
+}
+
+/// A saved stack with fresh pane ids, before its members are restored.
+struct SubpaneStackPlan {
+    members: Vec<PaneId>,
+    active: usize,
+}
+
+impl SubpaneStackPlan {
+    fn hidden_members(&self) -> impl Iterator<Item = PaneId> + '_ {
+        self.members
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx != self.active)
+            .map(|(_, id)| *id)
+    }
+}
+
+/// Plan the valid stacks of `tab`, allocating fresh ids for hidden members in
+/// `id_map`. Invalid stacks are dropped with a warning; their hidden members
+/// are not restored.
+fn plan_subpane_stacks(
+    tab: &TabSnapshot,
+    id_map: &mut HashMap<u32, PaneId>,
+) -> Vec<SubpaneStackPlan> {
+    let mut layout_ids = Vec::new();
+    collect_layout_snapshot_pane_ids(&tab.layout, &mut layout_ids);
+    let mut plans = Vec::new();
+    for (stack, validity) in validated_subpane_stacks(tab, &layout_ids) {
+        if let Err(reason) = validity {
+            warn!(
+                tab = ?tab.custom_name,
+                members = ?stack.members,
+                active = stack.active,
+                reason,
+                "dropping invalid saved subpane stack"
+            );
+            continue;
+        }
+        let members = stack
+            .members
+            .iter()
+            .map(|old_id| *id_map.entry(*old_id).or_insert_with(PaneId::alloc))
+            .collect();
+        plans.push(SubpaneStackPlan {
+            members,
+            active: stack.active,
+        });
+    }
+    plans
+}
+
+/// Rebuild stacks from the members that were restored. When the saved active
+/// member is gone, the next restored member (else the previous one) takes its
+/// layout leaf; a stack left with one member becomes a plain pane.
+fn rebuild_subpane_stacks(
+    plans: Vec<SubpaneStackPlan>,
+    node: &mut Node,
+    restored: &HashMap<PaneId, PaneState>,
+) -> crate::workspace::stack::SubpaneStacks {
+    let mut stacks = crate::workspace::stack::SubpaneStacks::default();
+    for plan in plans {
+        let saved_leaf = plan.members[plan.active];
+        let leaf = if restored.contains_key(&saved_leaf) {
+            saved_leaf
+        } else {
+            let Some(next) = plan.members[plan.active + 1..]
+                .iter()
+                .chain(plan.members[..plan.active].iter().rev())
+                .copied()
+                .find(|id| restored.contains_key(id))
+            else {
+                continue;
+            };
+            replace_node_leaf(node, saved_leaf, next);
+            next
+        };
+        let members: Vec<PaneId> = plan
+            .members
+            .iter()
+            .copied()
+            .filter(|id| restored.contains_key(id))
+            .collect();
+        let Some((&first, rest)) = members.split_first() else {
+            continue;
+        };
+        for &member in rest {
+            stacks.add_member(first, member);
+        }
+        stacks.activate(leaf);
+    }
+    stacks
+}
+
+fn replace_node_leaf(node: &mut Node, old: PaneId, new: PaneId) {
+    match node {
+        Node::Pane(id) if *id == old => *id = new,
+        Node::Pane(_) => {}
+        Node::Split { first, second, .. } => {
+            replace_node_leaf(first, old, new);
+            replace_node_leaf(second, old, new);
         }
     }
 }
@@ -385,7 +552,7 @@ fn restore_workspace(
             tab.number = public_tab_number;
         }
         next_public_tab_number = next_public_tab_number.max(tab.number + 1);
-        for pane_id in tab.layout.pane_ids() {
+        for pane_id in tab.pane_ids_with_subpanes() {
             let public_number = public_pane_numbers_by_old_raw
                 .get(
                     &reverse_id_map
@@ -500,12 +667,18 @@ fn restore_tab(
     imported_panes: &mut HashMap<u32, crate::handoff_runtime::ImportedHandoffRuntime>,
     public_pane_ids_by_old_raw: &HashMap<u32, String>,
 ) -> RestoreFailures<Option<RestoredTab>> {
-    let (node, id_map) = restore_node_remapped(&snap.layout);
+    let (mut node, mut id_map) = restore_node_remapped(&snap.layout);
+    let stack_plans = plan_subpane_stacks(snap, &mut id_map);
     let reverse_id_map: HashMap<PaneId, u32> = id_map
         .iter()
         .map(|(&old_id, &new_id)| (new_id, old_id))
         .collect();
-    let pane_ids = collect_pane_ids(&node);
+    let mut pane_ids = collect_pane_ids(&node);
+    pane_ids.extend(
+        stack_plans
+            .iter()
+            .flat_map(SubpaneStackPlan::hidden_members),
+    );
 
     let mut panes = HashMap::new();
     let mut terminals = Vec::new();
@@ -769,6 +942,7 @@ fn restore_tab(
         return (None, failed_imports);
     }
 
+    let subpanes = rebuild_subpane_stacks(stack_plans, &mut node, &panes);
     let surviving: HashSet<PaneId> = panes.keys().copied().collect();
     let Some(node) = prune_restored_node(node, &surviving) else {
         warn!(
@@ -778,7 +952,8 @@ fn restore_tab(
         return (None, failed_imports);
     };
     let pane_ids = collect_pane_ids(&node);
-    let Some(focus) = resolve_restored_pane(snap.focused, &id_map, &surviving, &pane_ids) else {
+    let layout_ids: HashSet<PaneId> = pane_ids.iter().copied().collect();
+    let Some(focus) = resolve_restored_pane(snap.focused, &id_map, &layout_ids, &pane_ids) else {
         return (None, failed_imports);
     };
     let Some(root_pane) = resolve_restored_pane(snap.root_pane, &id_map, &surviving, &pane_ids)
@@ -795,6 +970,7 @@ fn restore_tab(
                 root_pane,
                 layout,
                 panes,
+                subpanes,
                 #[cfg(test)]
                 runtimes: HashMap::new(),
                 zoomed: snap.zoomed,
@@ -1559,6 +1735,7 @@ mod tests {
                     zoomed: false,
                     focused: Some(0),
                     root_pane: Some(0),
+                    subpanes: Vec::new(),
                 }],
                 active_tab: 0,
             }],
@@ -1654,6 +1831,7 @@ mod tests {
                     zoomed: false,
                     focused: Some(10),
                     root_pane: Some(10),
+                    subpanes: Vec::new(),
                 }],
                 active_tab: 0,
             }],
@@ -1738,6 +1916,7 @@ mod tests {
                         zoomed: false,
                         focused: Some(10),
                         root_pane: Some(10),
+                        subpanes: Vec::new(),
                     },
                     TabSnapshot {
                         custom_name: None,
@@ -1746,6 +1925,7 @@ mod tests {
                         zoomed: false,
                         focused: Some(11),
                         root_pane: Some(11),
+                        subpanes: Vec::new(),
                     },
                     TabSnapshot {
                         custom_name: None,
@@ -1754,6 +1934,7 @@ mod tests {
                         zoomed: false,
                         focused: Some(12),
                         root_pane: Some(12),
+                        subpanes: Vec::new(),
                     },
                     TabSnapshot {
                         custom_name: None,
@@ -1762,6 +1943,7 @@ mod tests {
                         zoomed: false,
                         focused: Some(13),
                         root_pane: Some(13),
+                        subpanes: Vec::new(),
                     },
                 ],
                 active_tab: 3,
@@ -1825,6 +2007,7 @@ mod tests {
                 zoomed: false,
                 focused: Some(10),
                 root_pane: Some(10),
+                subpanes: Vec::new(),
             }],
             active_tab: 0,
         };
@@ -1875,6 +2058,7 @@ mod tests {
                     zoomed: false,
                     focused: Some(0),
                     root_pane: Some(0),
+                    subpanes: Vec::new(),
                 }],
                 active_tab: 0,
             }],
@@ -2215,6 +2399,7 @@ mod tests {
                     zoomed: false,
                     focused: Some(0),
                     root_pane: Some(0),
+                    subpanes: Vec::new(),
                 }],
                 active_tab: 0,
             }],
@@ -2226,5 +2411,243 @@ mod tests {
         };
         history.layout_fingerprint = super::super::snapshot::layout_fingerprint(&snapshot);
         (snapshot, history)
+    }
+
+    /// Two-slot tab whose left slot holds the stack `[left, second, third]`
+    /// with `second` shown. Returns the workspace and the stack members.
+    fn workspace_with_subpane_stack() -> (Workspace, Vec<PaneId>) {
+        let mut ws = Workspace::test_new("stacks");
+        let left = ws.tabs[0].root_pane;
+        ws.test_split(Direction::Horizontal);
+        let second = ws.test_add_subpane(left);
+        let third = ws.test_add_subpane(left);
+        assert!(ws.tabs[0].activate_subpane(second));
+        ws.assert_invariants_for_test();
+        (ws, vec![left, second, third])
+    }
+
+    fn capture_subpane_stack_snapshot() -> (SessionSnapshot, Workspace, Vec<PaneId>) {
+        let (ws, members) = workspace_with_subpane_stack();
+        let runtimes = crate::terminal::TerminalRuntimeRegistry::from(HashMap::new());
+        let mut snapshot = crate::persist::capture(
+            std::slice::from_ref(&ws),
+            &HashMap::new(),
+            &runtimes,
+            Some(0),
+            0,
+        );
+        let cwd = std::env::current_dir().unwrap();
+        for pane in snapshot.workspaces[0].tabs[0].panes.values_mut() {
+            pane.cwd = cwd.clone();
+        }
+        (snapshot, ws, members)
+    }
+
+    fn restore_for_subpane_test(snapshot: &SessionSnapshot) -> RestoredSession {
+        restore(
+            snapshot,
+            None,
+            24,
+            80,
+            0,
+            test_restore_shell(),
+            crate::config::ShellModeConfig::NonLogin,
+            false,
+            mpsc::channel(64).0,
+            Arc::new(Notify::new()),
+            Arc::new(RenderSignal::new()),
+        )
+    }
+
+    fn assert_restored_invariants(
+        workspaces: Vec<Workspace>,
+        terminals: HashMap<TerminalId, TerminalState>,
+    ) {
+        let mut state = crate::app::AppState::test_new();
+        state.workspaces = workspaces;
+        state.terminals = terminals;
+        state.active = Some(0);
+        state.assert_invariants_for_test();
+    }
+
+    /// Public pane numbers of the restored stack members and the active index.
+    fn restored_stack_numbers(workspace: &Workspace) -> (Vec<usize>, usize) {
+        let tab = &workspace.tabs[0];
+        let stacks: Vec<_> = tab.subpanes.iter().collect();
+        assert_eq!(stacks.len(), 1, "exactly one stack should restore");
+        let stack = stacks[0];
+        let numbers = stack
+            .members()
+            .iter()
+            .map(|id| workspace.public_pane_number(*id).unwrap())
+            .collect();
+        let active = stack
+            .members()
+            .iter()
+            .position(|id| *id == stack.active_member())
+            .unwrap();
+        (numbers, active)
+    }
+
+    #[tokio::test]
+    async fn subpane_stacks_round_trip_through_capture_and_restore() {
+        let (snapshot, original, members) = capture_subpane_stack_snapshot();
+        let saved = &snapshot.workspaces[0].tabs[0].subpanes;
+        assert_eq!(
+            saved,
+            &vec![super::super::snapshot::SubpaneStackSnapshot {
+                members: members.iter().map(|id| id.raw()).collect(),
+                active: 1,
+            }]
+        );
+        let json = serde_json::to_string(&snapshot).unwrap();
+        let parsed = super::super::snapshot::parse_snapshot(&json).unwrap();
+
+        let (workspaces, terminals, _runtimes) = restore_for_subpane_test(&parsed);
+
+        let expected_numbers: Vec<_> = members
+            .iter()
+            .map(|id| original.public_pane_number(*id).unwrap())
+            .collect();
+        assert_eq!(
+            restored_stack_numbers(&workspaces[0]),
+            (expected_numbers, 1)
+        );
+        let tab = &workspaces[0].tabs[0];
+        let stack = tab.subpanes.iter().next().unwrap();
+        assert!(tab.layout.pane_ids().contains(&stack.active_member()));
+        assert_eq!(tab.panes.len(), 4, "hidden members are restored");
+        let old_raws: HashSet<u32> = members.iter().map(|id| id.raw()).collect();
+        assert!(
+            stack
+                .members()
+                .iter()
+                .all(|id| !old_raws.contains(&id.raw())),
+            "restored members get fresh pane ids"
+        );
+        assert_restored_invariants(workspaces, terminals);
+    }
+
+    #[tokio::test]
+    async fn invalid_subpane_stack_is_dropped_and_tab_still_restores() {
+        use super::super::snapshot::SubpaneStackSnapshot;
+
+        let (base, original, members) = capture_subpane_stack_snapshot();
+        let raws: Vec<u32> = members.iter().map(|id| id.raw()).collect();
+        let right = original.tabs[0]
+            .layout
+            .pane_ids()
+            .into_iter()
+            .find(|id| !members.contains(id))
+            .unwrap()
+            .raw();
+        let invalid = [
+            vec![SubpaneStackSnapshot {
+                members: vec![raws[0], raws[1], 9_999],
+                active: 1,
+            }],
+            vec![SubpaneStackSnapshot {
+                members: raws.clone(),
+                active: 3,
+            }],
+            vec![SubpaneStackSnapshot {
+                members: vec![raws[1]],
+                active: 0,
+            }],
+            vec![SubpaneStackSnapshot {
+                members: vec![raws[1], right],
+                active: 0,
+            }],
+            vec![SubpaneStackSnapshot {
+                members: raws.clone(),
+                active: 0,
+            }],
+        ];
+        for stacks in invalid {
+            let mut snapshot =
+                super::super::snapshot::parse_snapshot(&serde_json::to_string(&base).unwrap())
+                    .unwrap();
+            snapshot.workspaces[0].tabs[0].subpanes = stacks.clone();
+
+            let (workspaces, terminals, _runtimes) = restore_for_subpane_test(&snapshot);
+
+            let tab = &workspaces[0].tabs[0];
+            assert!(tab.subpanes.is_empty(), "{stacks:?} should be dropped");
+            assert_eq!(tab.panes.len(), 2, "{stacks:?} keeps only layout panes");
+            assert_restored_invariants(workspaces, terminals);
+        }
+
+        let mut snapshot = base;
+        let valid = snapshot.workspaces[0].tabs[0].subpanes[0].clone();
+        snapshot.workspaces[0].tabs[0].subpanes = vec![
+            valid,
+            SubpaneStackSnapshot {
+                members: vec![right, raws[2]],
+                active: 0,
+            },
+        ];
+        let (workspaces, terminals, _runtimes) = restore_for_subpane_test(&snapshot);
+        let expected_numbers: Vec<_> = members
+            .iter()
+            .map(|id| original.public_pane_number(*id).unwrap())
+            .collect();
+        assert_eq!(
+            restored_stack_numbers(&workspaces[0]),
+            (expected_numbers, 1),
+            "a stack reusing a member of an earlier stack is dropped"
+        );
+        assert_restored_invariants(workspaces, terminals);
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn subpane_handoff_adopts_hidden_runtimes_and_aliases_them() {
+        let (snapshot, _, _) = capture_subpane_stack_snapshot();
+        let (workspaces, terminals, runtimes) = restore_for_subpane_test(&snapshot);
+        let runtimes = crate::terminal::TerminalRuntimeRegistry::from(runtimes);
+        let snapshot = crate::persist::capture(&workspaces, &terminals, &runtimes, Some(0), 0);
+        let tab = &workspaces[0].tabs[0];
+        let stack = tab.subpanes.iter().next().unwrap().clone();
+        let mut imports = HashMap::new();
+        for (pane_id, pane) in &tab.panes {
+            let runtime = runtimes.get(&pane.attached_terminal_id).unwrap();
+            runtime
+                .pause_handoff_reader(std::time::Duration::from_secs(2))
+                .unwrap();
+            imports.insert(
+                pane_id.raw(),
+                crate::handoff_runtime::ImportedHandoffRuntime {
+                    master_fd: runtime.duplicate_handoff_fd().unwrap(),
+                    state: runtime.handoff_runtime_state(pane_id.raw()),
+                },
+            );
+        }
+        assert_eq!(imports.len(), 4, "hidden members export their runtimes");
+
+        let (handoff_workspaces, _terminals, handoff_runtimes) = restore_handoff(
+            &snapshot,
+            0,
+            test_restore_shell(),
+            crate::config::ShellModeConfig::NonLogin,
+            &mut imports,
+            mpsc::channel(64).0,
+            Arc::new(Notify::new()),
+            Arc::new(RenderSignal::new()),
+        )
+        .expect("handoff must adopt every hidden member runtime");
+        assert_eq!(handoff_runtimes.len(), 4);
+        drop(handoff_runtimes);
+        drop(runtimes);
+
+        let aliases = handoff_pane_aliases(&snapshot, &handoff_workspaces);
+        let handoff_stack = handoff_workspaces[0].tabs[0]
+            .subpanes
+            .iter()
+            .next()
+            .unwrap();
+        for (old, new) in stack.members().iter().zip(handoff_stack.members()) {
+            assert_eq!(aliases.get(&old.raw()), Some(new), "alias for {old:?}");
+        }
+        assert_eq!(handoff_stack.active_member(), handoff_stack.members()[1]);
     }
 }

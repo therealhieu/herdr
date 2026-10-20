@@ -290,6 +290,26 @@ impl TileLayout {
         true
     }
 
+    /// Replace leaf `old` with `new` in place, carrying focus and focus history
+    /// over. Split shape and ratios are unchanged. Returns false when `old` is
+    /// not a leaf or `new` is already in the layout.
+    pub fn replace_leaf(&mut self, old: PaneId, new: PaneId) -> bool {
+        if self.pane_ids().contains(&new) {
+            return false;
+        }
+        let Some(Node::Pane(id)) = find_pane_mut(&mut self.root, old) else {
+            return false;
+        };
+        *id = new;
+        if self.focus == old {
+            self.focus = new;
+        }
+        if self.prev_focus == Some(old) {
+            self.prev_focus = Some(new);
+        }
+        true
+    }
+
     /// Set the ratio of a split node at the given path.
     pub fn set_ratio_at(&mut self, path: &[bool], ratio: f32) -> bool {
         set_ratio_at(&mut self.root, path, ratio.clamp(0.1, 0.9))
@@ -990,6 +1010,44 @@ mod tests {
         assert_eq!(pane_rects(&layout), before_rects);
         assert_eq!(split_snapshot(&layout), before_splits);
         assert_eq!(layout.focused(), before_focus);
+    }
+
+    #[test]
+    fn replace_leaf_keeps_geometry_and_moves_focus_history() {
+        let mut layout = sample_layout();
+        layout.focus_pane(pane(3));
+        layout.focus_pane(pane(2));
+        let before_rects = pane_rects(&layout);
+        let before_splits = split_snapshot(&layout);
+        let area = Rect::new(0, 0, 100, 40);
+        let before_borders: Vec<_> = layout.splits(area).iter().map(|s| s.pos).collect();
+
+        assert!(layout.replace_leaf(pane(2), pane(9)));
+        assert!(layout.replace_leaf(pane(3), pane(8)));
+
+        assert_eq!(layout.focused(), pane(9));
+        assert_eq!(layout.prev_focus, Some(pane(8)));
+        assert_eq!(split_snapshot(&layout), before_splits);
+        let after_borders: Vec<_> = layout.splits(area).iter().map(|s| s.pos).collect();
+        assert_eq!(after_borders, before_borders);
+        let after_rects = pane_rects(&layout);
+        assert_eq!(after_rects[0], before_rects[0]);
+        assert_eq!(after_rects[1], (pane(9), before_rects[1].1));
+        assert_eq!(after_rects[2], (pane(8), before_rects[2].1));
+        assert_eq!(after_rects[3], before_rects[3]);
+    }
+
+    #[test]
+    fn replace_leaf_rejects_unknown_or_present_ids() {
+        let mut layout = sample_layout();
+        let before_rects = pane_rects(&layout);
+
+        assert!(!layout.replace_leaf(pane(99), pane(98)));
+        assert!(!layout.replace_leaf(pane(2), pane(4)));
+        assert!(!layout.replace_leaf(pane(2), pane(2)));
+
+        assert_eq!(pane_rects(&layout), before_rects);
+        assert_eq!(layout.focused(), pane(2));
     }
 
     #[test]

@@ -9,6 +9,7 @@ mod panes;
 pub(crate) mod plugins;
 pub(super) mod responses;
 mod session;
+mod subpanes;
 mod tabs;
 mod workspaces;
 mod worktrees;
@@ -1141,6 +1142,9 @@ impl App {
                 return self.handle_agent_send_keys(request.id, params);
             }
             Method::PaneSplit(params) => return self.handle_pane_split(request.id, params),
+            Method::PaneSubpaneCreate(params) => {
+                return self.handle_pane_subpane_create(request.id, params);
+            }
             Method::PaneSwap(params) => return self.handle_pane_swap(request.id, params),
             Method::PaneMove(params) => return self.handle_pane_move(request.id, params),
             Method::PaneZoom(params) => return self.handle_pane_zoom(request.id, params),
