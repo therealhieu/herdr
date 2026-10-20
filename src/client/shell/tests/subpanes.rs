@@ -98,6 +98,17 @@ fn subpane_keys_step_with_wrap_and_jump_by_index() {
     let jump = press(&mut state, KeybindAction::FocusSubpane(1));
     assert_eq!(focused_pane(&jump), Some("pane_3"));
     assert!(press(&mut state, KeybindAction::FocusSubpane(3)).is_empty());
+
+    let mut first_member = stacked_snapshot();
+    first_member.panes = vec![
+        member("pane_2", "pane_2", 0, 3, "codex"),
+        member("pane_3", "pane_2", 1, 3, "zsh"),
+        member("pane_1", "pane_2", 2, 3, "claude"),
+    ];
+    first_member.focused_pane_id = Some("pane_2".into());
+    let mut state = shell_state(first_member);
+    let previous = press(&mut state, KeybindAction::PreviousSubpane);
+    assert_eq!(focused_pane(&previous), Some("pane_1"));
 }
 
 #[test]
