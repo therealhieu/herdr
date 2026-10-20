@@ -33,7 +33,17 @@ use super::responses::{encode_error, encode_success};
 impl App {
     pub(super) fn handle_pane_split(&mut self, id: String, params: PaneSplitParams) -> String {
         let target = if let Some(target_pane_id) = params.target_pane_id.as_deref() {
-            self.parse_pane_id(target_pane_id)
+            // A hidden stack member is not a layout leaf; split next to the
+            // leaf its slot shows instead.
+            self.parse_pane_id(target_pane_id).map(|(ws_idx, pane_id)| {
+                let ws = &self.state.workspaces[ws_idx];
+                let leaf = ws
+                    .find_tab_index_for_pane(pane_id)
+                    .map_or(pane_id, |tab_idx| {
+                        ws.tabs[tab_idx].subpanes.visible_leaf(pane_id)
+                    });
+                (ws_idx, leaf)
+            })
         } else if let Some(workspace_id) = params.workspace_id.as_deref() {
             self.parse_workspace_id(workspace_id).and_then(|ws_idx| {
                 let pane_id = self.state.workspaces.get(ws_idx)?.focused_pane_id()?;
@@ -4779,6 +4789,46 @@ mod tests {
         assert_eq!(tab.layout.pane_ids(), vec![other, visible]);
         assert!(tab.subpanes.is_hidden(hidden));
         app.state.assert_invariants_for_test();
+    }
+
+    #[tokio::test]
+    async fn subpane_split_on_hidden_member_splits_next_to_visible_leaf() {
+        let (mut app, _) = app_with_test_workspace();
+        app.state.default_shell = crate::app::api::test_support::exiting_test_command().into();
+        let hidden = app.state.workspaces[0].tabs[0].root_pane;
+        let visible = app.state.workspaces[0].test_add_subpane(hidden);
+        app.state.active = Some(0);
+        app.state.ensure_test_terminals();
+        let hidden_public = app.public_pane_id(0, hidden).unwrap();
+
+        let response = app.handle_pane_split(
+            "req".into(),
+            PaneSplitParams {
+                workspace_id: None,
+                target_pane_id: Some(hidden_public),
+                direction: SplitDirection::Right,
+                ratio: None,
+                cwd: None,
+                focus: false,
+                right_click: Default::default(),
+                env: Default::default(),
+            },
+        );
+
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        assert!(matches!(success.result, ResponseResult::PaneInfo { .. }));
+        let tab = &app.state.workspaces[0].tabs[0];
+        let leaves = tab.layout.pane_ids();
+        assert_eq!(leaves.len(), 2);
+        assert_eq!(leaves[0], visible);
+        assert!(tab.subpanes.is_hidden(hidden));
+        assert_eq!(tab.subpanes.visible_leaf(hidden), visible);
+        app.state.assert_invariants_for_test();
+
+        let runtimes: Vec<_> = app.terminal_runtimes.drain().collect();
+        for (_terminal_id, runtime) in runtimes {
+            runtime.shutdown();
+        }
     }
 
     #[test]
