@@ -166,8 +166,8 @@ Aim for the fewest cases that catch the failures that matter. Test count is not 
 
 ### Status
 
-- **State:** `In Progress`
-- **Position:** `Harden`
+- **State:** `Completed`
+- **Position:** `Deliver` — local work done; push and PR await authorization
 - **Work branch:** `feat/subpane-tab-strip`
 - **Base commit:** `11ab68e9` — the diff base for overall verification and harden
 
@@ -376,13 +376,13 @@ harden → Deliver
 
 ### Harden
 
-- **Report:** `.s1mple/work/active/w261020lxin-subpane-tab-strip/reports/harden-report.md` — `Pending`
-- **Result:** `Pending`
+- **Report:** `.s1mple/work/active/w261020lxin-subpane-tab-strip/reports/harden-report.md` — `9a84b607`, resolution `bbeb2007`
+- **Result:** 1 Minor finding (`HRD-1`, `pane.resize` on a hidden member was a silent no-op) → fixed in `e42b02ad`. Final checks: `just lint` passed, `just test` 4002 passed / 16 skipped, workflow-leak scan clean
 
 ### Deliver Evidence
 
-- **Project document:** `Pending`
-- **Delivery actions:** `Pending`
+- **Project document:** `19d64edb` — Fork Customizations row for native subpanes, Last Modified 2026-10-20
+- **Delivery actions:** Not done yet — push to `origin`, `gh pr create --base master`, `Fork CI`, and moving the work folder to `done/` wait for the user's authorization
 
 ### Blockers, Deviations, and Replacements
 
@@ -396,12 +396,17 @@ harden → Deliver
 - Open for overall: hidden members with a pending agent resume plan resume only when activated (resume candidates come from layout leaves).
 - G4: handler in new `src/app/api/subpanes.rs`, client logic in new `src/client/shell/subpanes.rs`. `ClientShellPane.subpane` serializes as `null` when absent (no `skip_serializing_if`, required by the snapshot bincode round-trip test); older clients ignore it. `focus: false` on `pane.subpane.create` still shows the new member in its slot; it only skips moving focus. Keys are spelled `prefix+period`/`prefix+comma`.
 - G4: `prefix+tab` pane cycling now skips hidden members (`G4-VER1`). Older clients connected to this server still see hidden members in `snapshot.panes` and can cycle into them (activating them).
-- Overall: `pane.zoom` and `pane.resize` given a hidden member id pass it through unmapped (not raised as a finding; left as a known follow-up).
+- Overall: `pane.zoom` given a hidden member id activates and zooms it (through `focus_pane_in_workspace`); `pane.resize` now resizes its slot (`HRD-1`).
 - G1: commit `0f6ecbc0` body says `Task: G1-T3 — Include hidden subpanes in pane and agent lists`; the plan title is `Include hidden members in data lists` (history not rewritten).
 
 ### Completion Summary
 
-`Pending`
+All four groups are accepted and merged on `feat/subpane-tab-strip`, overall verification passed every check, and harden is resolved. A pane slot can now hold a stack of terminals: the BSP leaf is the active member, hidden members keep running at the slot size and are skipped as render sources, and the slot's top border draws a strip of ` {status} {label} ` segments with `×` and `+`, or a `[i/n g]` badge when narrow. Keys (`prefix+t`, `prefix+period`, `prefix+comma`, indexed `subpane`), strip clicks, and the JSON API (`pane.subpane.create`, `pane.focus` activation, `PaneInfo.subpane`) drive it. Stacks survive restore and live handoff. No wire protocol, frozen codec, fixture, or version constant changed.
+
+- **Evidence:** `V1`–`V12` passed (see table); final `just lint` and `just test` (4002 passed, 16 skipped) on the head; render scaling unchanged within noise.
+- **Not verified by the agent:** the strip's look in a real terminal (`V12` visual part).
+- **Known limits:** older binaries drop hidden members on restore; older clients can cycle into hidden members; `pane_borders = off` hides the strip; `layout.export`/`layout.apply` ignore stacks; `focus: false` on `pane.subpane.create` still shows the new member.
+- **Next:** with the user's authorization, push the branch, open the fork PR, wait for `Fork CI`, then move this folder to `.s1mple/work/done/`.
 
 ## Ship File Check
 
