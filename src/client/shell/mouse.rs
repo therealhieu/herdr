@@ -2197,6 +2197,17 @@ impl ClientShellState {
                     }
                     return;
                 }
+                // Strip segments sit on the top border, which a split handle can share.
+                let strip_action = self
+                    .hits
+                    .subpane_strips
+                    .iter()
+                    .find(|hit| super::contains(hit.rect, point))
+                    .map(|hit| hit.action.clone());
+                if let Some(action) = strip_action {
+                    self.handle_subpane_strip_click(action, outcome);
+                    return;
+                }
                 let split_hit = self
                     .hits
                     .pane_splits
