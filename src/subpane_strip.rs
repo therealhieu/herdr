@@ -4,8 +4,16 @@
 //! the active index, and the slot width, so the server renderer and the client
 //! hit-testing compute identical ranges.
 
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::{Modifier, Style},
+};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use crate::api::schema::AgentStatus;
+use crate::app::state::Palette;
+use crate::config::StatusIndicatorStyle;
 use crate::terminal::TerminalState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,7 +53,7 @@ pub(crate) struct StripLayout {
 
 /// Longest member label, in columns.
 pub(crate) const MAX_LABEL_WIDTH: usize = 20;
-const FALLBACK_LABEL: &str = "shell";
+pub(crate) const FALLBACK_LABEL: &str = "shell";
 /// ` {status} ` before the label and ` ` after it.
 const MEMBER_CHROME: u16 = 4;
 /// `× ` after the active member's label.
@@ -195,6 +203,115 @@ pub(crate) fn subpane_label(terminal: &TerminalState) -> String {
         .or_else(|| terminal.terminal_title_stripped())
         .unwrap_or_else(|| FALLBACK_LABEL.to_string());
     fit_label(label.trim(), MAX_LABEL_WIDTH)
+}
+
+/// What the strip shows for one member. `status` is `None` when no agent is
+/// detected, which leaves the status column blank.
+pub(crate) struct StripMember {
+    pub label: String,
+    pub status: Option<AgentStatus>,
+}
+
+pub(crate) struct StripStyle<'a> {
+    pub focused: bool,
+    pub palette: &'a Palette,
+    pub indicators: StatusIndicatorStyle,
+}
+
+/// Draw the strip over the top border of the slot at `rect`, clipped to the
+/// buffer and to the columns between the slot's corners.
+pub(crate) fn render_strip(
+    buf: &mut Buffer,
+    rect: Rect,
+    members: &[StripMember],
+    active: usize,
+    style: StripStyle<'_>,
+) {
+    let area = buf.area;
+    if rect.y < area.y || rect.y >= area.y.saturating_add(area.height) {
+        return;
+    }
+    let labels: Vec<&str> = members.iter().map(|member| member.label.as_str()).collect();
+    let layout = strip_layout(&labels, active, rect.width);
+    let end_x = rect
+        .x
+        .saturating_add(rect.width.saturating_sub(1))
+        .min(area.x.saturating_add(area.width));
+    let mut put = |x: u16, text: &str, text_style: Style| {
+        let x = rect.x.saturating_add(x);
+        if x >= area.x && x < end_x {
+            buf.set_stringn(x, rect.y, text, usize::from(end_x - x), text_style);
+        }
+    };
+    let palette = style.palette;
+    let label_style = |idx: usize| match (idx == active, style.focused) {
+        (true, true) => Style::default()
+            .fg(palette.accent)
+            .add_modifier(Modifier::BOLD),
+        (true, false) => Style::default()
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD),
+        (false, _) => Style::default().fg(palette.overlay0),
+    };
+    let glyph = |status: AgentStatus| {
+        (
+            crate::client::status_icon(status, style.indicators),
+            Style::default().fg(crate::client::status_color(status, palette)),
+        )
+    };
+
+    for segment in &layout.segments {
+        match segment.kind {
+            StripSegmentKind::Member(idx) => {
+                let Some(member) = members.get(idx) else {
+                    continue;
+                };
+                let text_style = label_style(idx);
+                let label = fit_label(&member.label, member_label_width(segment));
+                put(segment.x, &format!("   {label} "), text_style);
+                if let Some(status) = member.status {
+                    let (icon, icon_style) = glyph(status);
+                    put(segment.x + 1, icon, icon_style);
+                }
+            }
+            StripSegmentKind::Close(idx) => put(segment.x, "× ", label_style(idx)),
+            StripSegmentKind::Add => put(segment.x, " + ", Style::default().fg(palette.overlay0)),
+            StripSegmentKind::Badge => {
+                let text = badge_text(active, members.len());
+                let hidden = (layout.mode == StripMode::Badge)
+                    .then(|| most_urgent_hidden_status(members, active))
+                    .flatten();
+                let badge_style = Style::default().fg(palette.overlay0);
+                let right = segment.x + segment.width;
+                match hidden {
+                    Some(status) => {
+                        let (icon, icon_style) = glyph(status);
+                        put(segment.x, &format!("[{text} "), badge_style);
+                        put(right - 2, icon, icon_style);
+                        put(right - 1, "]", badge_style);
+                    }
+                    None => {
+                        let text = format!("[{text}]");
+                        let width = u16::try_from(text.len()).unwrap_or(segment.width);
+                        put(right.saturating_sub(width), &text, badge_style);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The highest-priority status among hidden members, ignoring idle members
+/// and members without an agent.
+fn most_urgent_hidden_status(members: &[StripMember], active: usize) -> Option<AgentStatus> {
+    let idle = crate::client::status_priority(AgentStatus::Idle);
+    members
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| *idx != active)
+        .filter_map(|(_, member)| member.status)
+        .filter(|status| crate::client::status_priority(*status) > idle)
+        .max_by_key(|status| crate::client::status_priority(*status))
 }
 
 #[cfg(test)]

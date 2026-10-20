@@ -53,8 +53,6 @@ mod selection;
 mod server;
 mod session;
 mod sound;
-// The border renderer that draws the strip lands separately from its layout.
-#[allow(dead_code)]
 mod subpane_strip;
 mod terminal;
 mod terminal_effects;

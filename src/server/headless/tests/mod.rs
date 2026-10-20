@@ -1610,6 +1610,37 @@ async fn different_size_shells_receive_geometry_specific_patches_from_one_dirty_
 }
 
 #[tokio::test]
+async fn subpane_hidden_member_is_not_a_visible_render_source() {
+    let mut server = test_headless_server();
+    let mut workspace = crate::workspace::Workspace::test_new("stack");
+    let hidden = workspace.tabs[0].root_pane;
+    let visible = workspace.test_add_subpane(hidden);
+    for (pane, text) in [(hidden, &b"HIDDEN"[..]), (visible, &b"VISIBLE"[..])] {
+        workspace.insert_test_runtime(
+            pane,
+            crate::terminal::TerminalRuntime::test_with_screen_bytes(80, 23, text),
+        );
+    }
+    server.app.state.workspaces = vec![workspace];
+    server.app.state.active = Some(0);
+    server.app.state.selected = 0;
+    server.app.state.mode = crate::app::Mode::Terminal;
+    server.app.state.ensure_test_terminals();
+
+    let (control, _render) = connect_matching_test_shell(&mut server, 7);
+    let _ = control.recv().expect("snapshot");
+    let visible_source = |server: &HeadlessServer, pane| {
+        server.pty_sources_visible_to_any_render_target(&HashSet::from([pane]))
+    };
+    assert!(visible_source(&server, visible));
+    assert!(!visible_source(&server, hidden));
+
+    assert!(server.app.state.focus_pane_in_workspace(0, hidden));
+    assert!(visible_source(&server, hidden));
+    assert!(!visible_source(&server, visible));
+}
+
+#[tokio::test]
 async fn retained_patches_only_reach_shells_viewing_the_dirty_tab() {
     let mut server = test_headless_server();
     let mut workspace = crate::workspace::Workspace::test_new("divergent-retained");

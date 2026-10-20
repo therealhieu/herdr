@@ -175,7 +175,7 @@ fn pane_surface_topology_signature(surface: &PaneSurfaceFrame) -> u64 {
     hash
 }
 
-fn status_icon(
+pub(crate) fn status_icon(
     status: crate::api::schema::AgentStatus,
     style: crate::config::StatusIndicatorStyle,
 ) -> &'static str {
@@ -200,7 +200,7 @@ fn status_dot(status: crate::api::schema::AgentStatus) -> &'static str {
     status_icon(status, crate::config::StatusIndicatorStyle::Dots)
 }
 
-fn status_priority(status: crate::api::schema::AgentStatus) -> u8 {
+pub(crate) fn status_priority(status: crate::api::schema::AgentStatus) -> u8 {
     use crate::api::schema::AgentStatus;
     match status {
         AgentStatus::Blocked => 4,
@@ -222,7 +222,7 @@ fn status_text(status: crate::api::schema::AgentStatus) -> &'static str {
     }
 }
 
-fn status_color(
+pub(crate) fn status_color(
     status: crate::api::schema::AgentStatus,
     palette: &Palette,
 ) -> ratatui::style::Color {
