@@ -32,6 +32,7 @@ mod render;
 mod scroll;
 mod settings;
 mod state;
+mod subpanes;
 mod surface_patch;
 mod text_editor;
 mod word_selection;

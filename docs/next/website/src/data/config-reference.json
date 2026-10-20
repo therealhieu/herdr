@@ -812,6 +812,30 @@
           "description": "Toggle zoom for the focused pane. The legacy key name `fullscreen` is accepted as an alias."
         },
         {
+          "key": "keys.new_subpane",
+          "type": "keybinding",
+          "default": "\"prefix+t\"",
+          "description": "Start a shell as a new terminal in the focused pane slot and show it. A plain pane becomes a slot with two terminals."
+        },
+        {
+          "key": "keys.next_subpane",
+          "type": "keybinding",
+          "default": "\"prefix+period\"",
+          "description": "Show the next terminal in the focused pane slot, wrapping. Does nothing on a plain pane."
+        },
+        {
+          "key": "keys.previous_subpane",
+          "type": "keybinding",
+          "default": "\"prefix+comma\"",
+          "description": "Show the previous terminal in the focused pane slot, wrapping. Does nothing on a plain pane."
+        },
+        {
+          "key": "keys.subpane",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Show a terminal of the focused pane slot by index 1-9. Unset by default."
+        },
+        {
           "key": "keys.resize_mode",
           "type": "keybinding",
           "default": "\"prefix+r\"",

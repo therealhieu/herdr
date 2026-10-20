@@ -55,6 +55,10 @@ pub(crate) enum KeybindAction {
     ClearPane,
     CopyMode,
     Zoom,
+    NewSubpane,
+    NextSubpane,
+    PreviousSubpane,
+    FocusSubpane(usize),
     EnterResizeMode,
     ResizePaneLeft,
     ResizePaneDown,
@@ -141,6 +145,9 @@ pub(crate) fn resolve_non_indexed_action(
         (&keybinds.split_horizontal, KeybindAction::SplitHorizontal),
         (&keybinds.close_pane, KeybindAction::ClosePane),
         (&keybinds.zoom, KeybindAction::Zoom),
+        (&keybinds.new_subpane, KeybindAction::NewSubpane),
+        (&keybinds.next_subpane, KeybindAction::NextSubpane),
+        (&keybinds.previous_subpane, KeybindAction::PreviousSubpane),
         (&keybinds.resize_mode, KeybindAction::EnterResizeMode),
         (&keybinds.resize_pane_left, KeybindAction::ResizePaneLeft),
         (&keybinds.resize_pane_down, KeybindAction::ResizePaneDown),
@@ -212,6 +219,13 @@ pub(crate) fn resolve_indexed_action(
             if trigger_matches(binding) {
                 if let Some(index) = binding.matched_index(key) {
                     return Some(KeybindAction::FocusAgent(index));
+                }
+            }
+        }
+        for binding in &keybinds.subpane {
+            if trigger_matches(binding) {
+                if let Some(index) = binding.matched_index(key) {
+                    return Some(KeybindAction::FocusSubpane(index));
                 }
             }
         }
