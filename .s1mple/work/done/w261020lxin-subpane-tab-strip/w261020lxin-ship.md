@@ -167,7 +167,7 @@ Aim for the fewest cases that catch the failures that matter. Test count is not 
 ### Status
 
 - **State:** `Completed`
-- **Position:** `Deliver` — local work done; push and PR await authorization
+- **Position:** `Deliver` — PR #5 green, squash merge authorized
 - **Work branch:** `feat/subpane-tab-strip`
 - **Base commit:** `11ab68e9` — the diff base for overall verification and harden
 
@@ -382,7 +382,7 @@ harden → Deliver
 ### Deliver Evidence
 
 - **Project document:** `19d64edb` — Fork Customizations row for native subpanes, Last Modified 2026-10-20
-- **Delivery actions:** Not done yet — push to `origin`, `gh pr create --base master`, `Fork CI`, and moving the work folder to `done/` wait for the user's authorization
+- **Delivery actions:** User authorized "squash merge". Pushed `feat/subpane-tab-strip` to `origin`; PR https://github.com/therealhieu/herdr/pull/5; `Fork CI` `check (macos)` passed in 8m5s (run 39422474586); work folder moved to `.s1mple/work/done/`; squash merge into `master` follows.
 
 ### Blockers, Deviations, and Replacements
 
@@ -406,7 +406,7 @@ All four groups are accepted and merged on `feat/subpane-tab-strip`, overall ver
 - **Evidence:** `V1`–`V12` passed (see table); final `just lint` and `just test` (4002 passed, 16 skipped) on the head; render scaling unchanged within noise.
 - **Not verified by the agent:** the strip's look in a real terminal (`V12` visual part).
 - **Known limits:** older binaries drop hidden members on restore; older clients can cycle into hidden members; `pane_borders = off` hides the strip; `layout.export`/`layout.apply` ignore stacks; `focus: false` on `pane.subpane.create` still shows the new member.
-- **Next:** with the user's authorization, push the branch, open the fork PR, wait for `Fork CI`, then move this folder to `.s1mple/work/done/`.
+- **Delivered:** PR #5, `Fork CI` green, squash-merged into fork `master` on the user's instruction.
 
 ## Ship File Check
 
