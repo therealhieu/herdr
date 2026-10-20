@@ -763,7 +763,12 @@ impl App {
             .workspaces
             .get_mut(ws_idx)
             .and_then(|ws| ws.tabs.get_mut(tab_idx))
-            .is_some_and(|tab| tab.layout.resize_pane(pane_id, direction, amount, area));
+            .is_some_and(|tab| {
+                // A hidden stack member is not a layout leaf; resize the leaf
+                // its slot shows instead.
+                let leaf = tab.subpanes.visible_leaf(pane_id);
+                tab.layout.resize_pane(leaf, direction, amount, area)
+            });
         if changed {
             self.schedule_session_save();
         }
@@ -4829,6 +4834,50 @@ mod tests {
         for (_terminal_id, runtime) in runtimes {
             runtime.shutdown();
         }
+    }
+
+    #[test]
+    fn subpane_resize_on_hidden_member_resizes_its_visible_leaf() {
+        let mut app = app_with_linked_worktree();
+        app.state.active = Some(0);
+        let hidden = app.state.workspaces[0].tabs[0].root_pane;
+        let visible = app.state.workspaces[0].test_add_subpane(hidden);
+        let right = app.state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        app.state.workspaces[0].tabs[0].layout.focus_pane(right);
+        app.state.ensure_test_terminals();
+        crate::ui::compute_view_with_runtime_registry(
+            &mut app.state,
+            &crate::terminal::TerminalRuntimeRegistry::new(),
+            ratatui::layout::Rect::new(0, 0, 100, 20),
+        );
+        assert!(app.state.workspaces[0].tabs[0].subpanes.is_hidden(hidden));
+        assert_eq!(
+            app.state.workspaces[0].tabs[0]
+                .subpanes
+                .visible_leaf(hidden),
+            visible
+        );
+        let hidden_public = app.public_pane_id(0, hidden).unwrap();
+
+        let response = app.handle_pane_resize(
+            "req".into(),
+            crate::api::schema::PaneResizeParams {
+                pane_id: Some(hidden_public.clone()),
+                direction: PaneDirection::Right,
+                amount: Some(0.1),
+            },
+        );
+
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let ResponseResult::PaneResize { resize } = success.result else {
+            panic!("expected pane resize response");
+        };
+        assert!(resize.changed);
+        assert_eq!(resize.reason, None);
+        assert_eq!(resize.pane_id, hidden_public);
+        assert!((resize.layout.splits[0].ratio - 0.6).abs() < f32::EPSILON);
+        assert!(app.state.workspaces[0].tabs[0].subpanes.is_hidden(hidden));
+        app.state.assert_invariants_for_test();
     }
 
     #[test]
