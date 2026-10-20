@@ -62,11 +62,11 @@ The change is sound. The only confirmed issue: `pane.resize` silently does nothi
 
 Workflow mode only. The implementer fills this section; the sections above stay unchanged.
 
-- **Status:** `Pending`
+- **Status:** `Completed`
 
 | Finding | Change | Verification | Commit | Result |
 |---|---|---|---|---|
-| `HRD-1` | `Pending` | `Pending` | `Pending` | `Pending` |
+| `HRD-1` | `handle_pane_resize` (`src/app/api/panes.rs`) resolves the target through `tab.subpanes.visible_leaf(pane_id)` before `TileLayout::resize_pane`; the response keeps the requested `pane_id`. Added regression test `subpane_resize_on_hidden_member_resizes_its_visible_leaf` | New test passes; it fails with the old `resize_pane(pane_id, …)` call (`resize.changed` assertion). `just test-one subpane`: 37 passed | `e42b02ad` | `Fixed` |
 
-- **Final checks:** `Pending`
-- **Remaining issues:** `Pending`
+- **Final checks:** `just lint` passed (fmt check, clippy `-D warnings`); `just test` passed (nextest 4002 passed, 16 skipped; Python and Bun suites pass); `just test-one subpane` passed (37 tests).
+- **Remaining issues:** None. An unrelated uncommitted edit to `.s1mple/docs/project.md` (Fork Customizations row and Last Modified date) was already in the working tree and was left untouched.
